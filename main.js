@@ -1,4 +1,4 @@
-import { initParticles, updateParticles, setShape, setColor } from "./particles.js";
+import { initParticles, updateParticles, setShape, setColor, setMotion } from "./particles.js";
 import { initHandTracking } from "./gestures.js";
 
 let scene, camera, renderer;
@@ -8,6 +8,7 @@ const hudGesture = document.getElementById("hud-gesture");
 const hudExp = document.getElementById("hud-exp");
 const hudOpen = document.getElementById("hud-open");
 const hudCam = document.getElementById("hud-cam");
+let hudMotionLabel = document.getElementById("hud-motion");
 
 initScene();
 initParticles(scene);
@@ -58,6 +59,12 @@ function onGesture(gesture, expansion, openness, direction) {
     setShape(shapeOrder[currentShapeIndex], expansion);
   }
 
+  // Map gestures to motion modes for smoother dynamics
+  if (gesture === "OPEN") setMotion("pulse");
+  if (gesture === "FIST") setMotion("orbit");
+  if (gesture === "PINCH") setMotion("swirl");
+  if (hudMotionLabel) hudMotionLabel.textContent = `motion: ${gesture === "OPEN" ? "pulse" : gesture === "FIST" ? "orbit" : gesture === "PINCH" ? "swirl" : ""}`;
+
   // Dynamic color: hue from openness; fallback by gesture
   const colorByGesture = {
     OPEN: 0xff66cc,
@@ -76,6 +83,9 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "2") setShape("flower", 1);
   if (e.key === "3") setShape("saturn", 1);
   if (e.key === "4") setShape("fireworks", 1);
+  if (e.key === "q") setMotion("pulse");
+  if (e.key === "w") setMotion("orbit");
+  if (e.key === "e") setMotion("swirl");
 });
 
 function hsvToHex(h, s, v) {

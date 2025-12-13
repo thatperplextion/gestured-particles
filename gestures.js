@@ -87,8 +87,9 @@ export function initHandTracking(callback) {
     const openness = Math.max(0, Math.min(1, (avgOpenNorm - 0.15) / 0.35));
 
     let gesture = "OPEN";
-    if (pinchDistNorm < 0.28) gesture = "PINCH"; // normalized threshold
-    else if (avgOpenNorm < 0.25) gesture = "FIST"; // normalized threshold
+    if (pinchDistNorm < 0.30) gesture = "PINCH"; // normalized threshold
+    else if (avgOpenNorm < 0.28) gesture = "FIST"; // normalized threshold
+    else if (avgOpenNorm > 0.55) gesture = "OPEN"; // explicitly mark open when wide
 
     // Swipe detection using wrist horizontal velocity
     // Keep a simple static cache on the function for previous wrist X
@@ -99,7 +100,8 @@ export function initHandTracking(callback) {
     // Threshold for swipe; MediaPipe coords ~0..1 range
     const SWIPE_THRESHOLD = 0.06;
     if (Math.abs(vx) > SWIPE_THRESHOLD) {
-      const direction = vx > 0 ? "LEFT" : "RIGHT";
+      // With selfieMode, image x increases to the right relative to user
+      const direction = vx > 0 ? "RIGHT" : "LEFT";
       try { callback("SWIPE", expansion, openness, direction); } catch (e) { console.warn(e); }
       return;
     }

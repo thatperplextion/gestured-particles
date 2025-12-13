@@ -6,11 +6,14 @@
   <style>
     body { margin: 0; overflow: hidden; background: black; }
     video { display: none; }
+    #hud { position: fixed; top: 12px; left: 12px; color: #fff; font-family: system-ui, Arial, sans-serif; font-size: 14px; background: rgba(0,0,0,0.35); padding: 8px 10px; border-radius: 8px; }
   </style>
 </head>
 <body>
 
 <video id="video" autoplay></video>
+
+<div id="hud">Gesture: <span id="hud-gesture">none</span> · Expansion: <span id="hud-exp">1.0</span> · Openness: <span id="hud-open">0.0</span></div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 

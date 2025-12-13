@@ -4,6 +4,9 @@ import { initHandTracking } from "./gestures.js";
 let scene, camera, renderer;
 let shapeOrder = ["heart", "flower", "saturn", "fireworks"];
 let currentShapeIndex = 0;
+const hudGesture = document.getElementById("hud-gesture");
+const hudExp = document.getElementById("hud-exp");
+const hudOpen = document.getElementById("hud-open");
 
 initScene();
 initParticles(scene);
@@ -31,6 +34,11 @@ function animate() {
 }
 
 function onGesture(gesture, expansion, openness, direction) {
+  // HUD debug
+  if (hudGesture) hudGesture.textContent = gesture || "none";
+  if (hudExp) hudExp.textContent = (expansion ?? 1).toFixed(2);
+  if (hudOpen) hudOpen.textContent = (openness ?? 0).toFixed(2);
+  console.log("Gesture", { gesture, expansion, openness, direction });
   // Map gestures to shapes
   if (gesture === "OPEN") setShape("heart", expansion);
   if (gesture === "FIST") setShape("saturn", expansion);
@@ -57,6 +65,14 @@ function onGesture(gesture, expansion, openness, direction) {
     : colorByGesture[gesture] || 0xffffff;
   setColor(hex);
 }
+
+// Keyboard fallback for testing
+window.addEventListener("keydown", (e) => {
+  if (e.key === "1") setShape("heart", 1);
+  if (e.key === "2") setShape("flower", 1);
+  if (e.key === "3") setShape("saturn", 1);
+  if (e.key === "4") setShape("fireworks", 1);
+});
 
 function hsvToHex(h, s, v) {
   let r, g, b;

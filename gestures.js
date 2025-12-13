@@ -1,6 +1,8 @@
 export function initHandTracking(callback) {
   const video = document.getElementById("video");
   const camStatusEl = document.getElementById("hud-cam");
+  const overlay = document.getElementById("overlay");
+  const ctx = overlay ? overlay.getContext("2d") : null;
 
   const hands = new Hands({
     locateFile: file =>
@@ -9,14 +11,47 @@ export function initHandTracking(callback) {
 
   hands.setOptions({
     maxNumHands: 1,
-    minDetectionConfidence: 0.7,
-    minTrackingConfidence: 0.7
+    minDetectionConfidence: 0.6,
+    minTrackingConfidence: 0.6,
+    modelComplexity: 1,
+    selfieMode: true
   });
 
+  let firstResultTime = null;
   hands.onResults(results => {
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
 
+    if (!firstResultTime) {
+      firstResultTime = performance.now();
+      if (camStatusEl) camStatusEl.textContent = "results";
+    }
+
     const lm = results.multiHandLandmarks[0];
+
+    // Draw landmarks on overlay
+    if (ctx && overlay) {
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      // Convert normalized coords (0..1) to canvas coords
+      const toX = x => x * overlay.width;
+      const toY = y => y * overlay.height;
+      // Draw connections (simple: fingertips to palm)
+      const tips = [4,8,12,16,20];
+      ctx.strokeStyle = "rgba(0,255,200,0.9)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      tips.forEach(i => {
+        ctx.moveTo(toX(lm[i].x), toY(lm[i].y));
+        ctx.lineTo(toX(lm[0].x), toY(lm[0].y));
+      });
+      ctx.stroke();
+      // Draw points
+      ctx.fillStyle = "rgba(255,255,255,0.9)";
+      for (let i = 0; i < lm.length; i++) {
+        ctx.beginPath();
+        ctx.arc(toX(lm[i].x), toY(lm[i].y), i % 4 === 0 ? 3 : 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
 
     const thumbTip = lm[4];
     const indexTip = lm[8];
@@ -25,19 +60,28 @@ export function initHandTracking(callback) {
     const middleBase = lm[9];
 
     const pinchDist = distance(thumbTip, indexTip);
-    const openDist = distance(indexTip, palm);
+    // Use average fingertip-to-palm distance for openness for robustness
+    const middleTip = lm[12];
+    const ringTip = lm[16];
+    const pinkyTip = lm[20];
+    const avgOpen = (
+      distance(indexTip, palm) +
+      distance(middleTip, palm) +
+      distance(ringTip, palm) +
+      distance(pinkyTip, palm)
+    ) / 4;
     
     // Hand size (distance from wrist to middle finger base) indicates distance from camera
     const handSize = distance(wrist, middleBase);
     // Map hand size to expansion scale (closer = larger hand = more expansion)
-    const expansion = Math.min(Math.max(handSize * 5, 0.5), 3);
+    const expansion = Math.min(Math.max(handSize * 6, 0.6), 3.5);
 
     // Openness metric normalized 0..1 (higher means more open)
-    const openness = Math.max(0, Math.min(1, (openDist - 0.05) / 0.25));
+    const openness = Math.max(0, Math.min(1, (avgOpen - 0.05) / 0.25));
 
     let gesture = "OPEN";
-    if (pinchDist < 0.03) gesture = "PINCH";
-    else if (openDist < 0.15) gesture = "FIST";
+    if (pinchDist < 0.035) gesture = "PINCH";
+    else if (avgOpen < 0.12) gesture = "FIST";
 
     // Swipe detection using wrist horizontal velocity
     // Keep a simple static cache on the function for previous wrist X

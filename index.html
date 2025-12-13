@@ -7,12 +7,14 @@
     body { margin: 0; overflow: hidden; background: black; }
     /* Show preview in bottom-left for debugging */
     video { position: fixed; bottom: 12px; left: 12px; width: 200px; height: 150px; border-radius: 8px; opacity: 0.7; object-fit: cover; }
+    #overlay { position: fixed; bottom: 12px; left: 12px; width: 200px; height: 150px; pointer-events: none; }
     #hud { position: fixed; top: 12px; left: 12px; color: #fff; font-family: system-ui, Arial, sans-serif; font-size: 14px; background: rgba(0,0,0,0.35); padding: 8px 10px; border-radius: 8px; }
   </style>
 </head>
 <body>
 
 <video id="video" autoplay muted playsinline></video>
+<canvas id="overlay" width="200" height="150"></canvas>
 
 <div id="hud">Cam: <span id="hud-cam">starting</span> · Gesture: <span id="hud-gesture">none</span> · Expansion: <span id="hud-exp">1.0</span> · Openness: <span id="hud-open">0.0</span></div>
 

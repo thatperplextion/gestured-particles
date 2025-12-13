@@ -1,10 +1,11 @@
-import { heartShape, saturnShape, fireworksShape } from "./shapes.js";
+import { heartShape, saturnShape, fireworksShape, flowerShape } from "./shapes.js";
 
 let points, geometry;
 let targetPositions = [];
 let currentExpansion = 1;
 let targetExpansion = 1;
 const COUNT = 2000;
+let material;
 
 export function initParticles(scene) {
   geometry = new THREE.BufferGeometry();
@@ -15,7 +16,7 @@ export function initParticles(scene) {
     new THREE.BufferAttribute(positions, 3)
   );
 
-  const material = new THREE.PointsMaterial({
+  material = new THREE.PointsMaterial({
     size: 0.05,
     color: 0xff66cc
   });
@@ -30,7 +31,13 @@ export function setShape(type, expansion = 1) {
   if (type === "heart") targetPositions = heartShape(COUNT);
   if (type === "saturn") targetPositions = saturnShape(COUNT);
   if (type === "fireworks") targetPositions = fireworksShape(COUNT);
+  if (type === "flower") targetPositions = flowerShape(COUNT);
   targetExpansion = expansion;
+}
+
+export function setColor(hex) {
+  if (!material) return;
+  material.color.setHex(hex);
 }
 
 export function updateParticles() {

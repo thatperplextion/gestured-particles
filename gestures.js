@@ -19,7 +19,6 @@ export function initHandTracking(callback) {
 
     const thumbTip = lm[4];
     const indexTip = lm[8];
-    const middleTip = lm[12];
     const palm = lm[0];
     const wrist = lm[0];
     const middleBase = lm[9];
@@ -32,11 +31,14 @@ export function initHandTracking(callback) {
     // Map hand size to expansion scale (closer = larger hand = more expansion)
     const expansion = Math.min(Math.max(handSize * 5, 0.5), 3);
 
+    // Openness metric normalized 0..1 (higher means more open)
+    const openness = Math.max(0, Math.min(1, (openDist - 0.05) / 0.25));
+
     let gesture = "OPEN";
     if (pinchDist < 0.03) gesture = "PINCH";
     else if (openDist < 0.15) gesture = "FIST";
 
-    callback(gesture, expansion);
+    callback(gesture, expansion, openness);
   });
 
   const camera = new Camera(video, {

@@ -32,3 +32,17 @@ export function fireworksShape(count) {
     };
   });
 }
+
+export function flowerShape(count) {
+  // Polar rose: r = cos(k * theta), k controls petals
+  const k = 5; // 5-petal flower
+  return Array.from({ length: count }, () => {
+    const t = Math.random() * Math.PI * 2;
+    const r = Math.cos(k * t) * 1.2;
+    return {
+      x: Math.cos(t) * r,
+      y: Math.sin(t) * r,
+      z: (Math.random() - 0.5) * 0.3
+    };
+  });
+}

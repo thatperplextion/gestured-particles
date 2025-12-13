@@ -28,8 +28,8 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-function onGesture(gesture) {
-  if (gesture === "OPEN") setShape("heart");
-  if (gesture === "FIST") setShape("saturn");
-  if (gesture === "PINCH") setShape("fireworks");
+function onGesture(gesture, expansion) {
+  if (gesture === "OPEN") setShape("heart", expansion);
+  if (gesture === "FIST") setShape("saturn", expansion);
+  if (gesture === "PINCH") setShape("fireworks", expansion);
 }

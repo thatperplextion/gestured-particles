@@ -38,6 +38,20 @@ export function initHandTracking(callback) {
     if (pinchDist < 0.03) gesture = "PINCH";
     else if (openDist < 0.15) gesture = "FIST";
 
+    // Swipe detection using wrist horizontal velocity
+    // Keep a simple static cache on the function for previous wrist X
+    if (!initHandTracking._prevWristX) initHandTracking._prevWristX = wrist.x;
+    const vx = wrist.x - initHandTracking._prevWristX; // positive = right to left in image space
+    initHandTracking._prevWristX = wrist.x;
+
+    // Threshold for swipe; MediaPipe coords ~0..1 range
+    const SWIPE_THRESHOLD = 0.06;
+    if (Math.abs(vx) > SWIPE_THRESHOLD) {
+      const direction = vx > 0 ? "LEFT" : "RIGHT";
+      callback("SWIPE", expansion, openness, direction);
+      return;
+    }
+
     callback(gesture, expansion, openness);
   });
 

@@ -2,6 +2,8 @@ import { initParticles, updateParticles, setShape, setColor } from "./particles.
 import { initHandTracking } from "./gestures.js";
 
 let scene, camera, renderer;
+let shapeOrder = ["heart", "flower", "saturn", "fireworks"];
+let currentShapeIndex = 0;
 
 initScene();
 initParticles(scene);
@@ -28,7 +30,7 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-function onGesture(gesture, expansion, openness) {
+function onGesture(gesture, expansion, openness, direction) {
   // Map gestures to shapes
   if (gesture === "OPEN") setShape("heart", expansion);
   if (gesture === "FIST") setShape("saturn", expansion);
@@ -36,6 +38,13 @@ function onGesture(gesture, expansion, openness) {
 
   // Extra: if openness is high, show flower
   if (openness && openness > 0.7) setShape("flower", expansion);
+
+  // Swipe cycles shapes
+  if (gesture === "SWIPE") {
+    if (direction === "RIGHT") currentShapeIndex = (currentShapeIndex + 1) % shapeOrder.length;
+    else if (direction === "LEFT") currentShapeIndex = (currentShapeIndex - 1 + shapeOrder.length) % shapeOrder.length;
+    setShape(shapeOrder[currentShapeIndex], expansion);
+  }
 
   // Dynamic color: hue from openness; fallback by gesture
   const colorByGesture = {

@@ -48,11 +48,11 @@ export function initHandTracking(callback) {
     const SWIPE_THRESHOLD = 0.06;
     if (Math.abs(vx) > SWIPE_THRESHOLD) {
       const direction = vx > 0 ? "LEFT" : "RIGHT";
-      callback("SWIPE", expansion, openness, direction);
+      try { callback("SWIPE", expansion, openness, direction); } catch (e) { console.warn(e); }
       return;
     }
 
-    callback(gesture, expansion, openness);
+    try { callback(gesture, expansion, openness); } catch (e) { console.warn(e); }
   });
 
   const camera = new Camera(video, {

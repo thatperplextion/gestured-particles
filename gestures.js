@@ -59,29 +59,36 @@ export function initHandTracking(callback) {
     const wrist = lm[0];
     const middleBase = lm[9];
 
-    const pinchDist = distance(thumbTip, indexTip);
-    // Use average fingertip-to-palm distance for openness for robustness
+    // Compute a scale-invariant normalization using palm width
+    const palmLeft = lm[5];   // index finger MCP
+    const palmRight = lm[17]; // pinky MCP
+    const palmWidth = Math.max(distance(palmLeft, palmRight), 1e-6);
+
+    const pinchDistNorm = distance(thumbTip, indexTip) / palmWidth;
+    // Use average fingertip-to-palm distance for openness, normalized
     const middleTip = lm[12];
     const ringTip = lm[16];
     const pinkyTip = lm[20];
-    const avgOpen = (
+    const avgOpenNorm = (
       distance(indexTip, palm) +
       distance(middleTip, palm) +
       distance(ringTip, palm) +
       distance(pinkyTip, palm)
-    ) / 4;
+    ) / (4 * palmWidth);
     
     // Hand size (distance from wrist to middle finger base) indicates distance from camera
     const handSize = distance(wrist, middleBase);
-    // Map hand size to expansion scale (closer = larger hand = more expansion)
-    const expansion = Math.min(Math.max(handSize * 6, 0.6), 3.5);
+    // Expansion based on inverse of palmWidth so farther hands still expand
+    const distanceScale = 1 / palmWidth; // larger when farther
+    const expansionRaw = 0.9 + distanceScale * 0.6; // base + gain
+    const expansion = Math.min(Math.max(expansionRaw, 0.7), 3.2);
 
     // Openness metric normalized 0..1 (higher means more open)
-    const openness = Math.max(0, Math.min(1, (avgOpen - 0.05) / 0.25));
+    const openness = Math.max(0, Math.min(1, (avgOpenNorm - 0.15) / 0.35));
 
     let gesture = "OPEN";
-    if (pinchDist < 0.035) gesture = "PINCH";
-    else if (avgOpen < 0.12) gesture = "FIST";
+    if (pinchDistNorm < 0.28) gesture = "PINCH"; // normalized threshold
+    else if (avgOpenNorm < 0.25) gesture = "FIST"; // normalized threshold
 
     // Swipe detection using wrist horizontal velocity
     // Keep a simple static cache on the function for previous wrist X

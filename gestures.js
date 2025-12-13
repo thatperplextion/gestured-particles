@@ -1,5 +1,6 @@
 export function initHandTracking(callback) {
   const video = document.getElementById("video");
+  const camStatusEl = document.getElementById("hud-cam");
 
   const hands = new Hands({
     locateFile: file =>
@@ -56,12 +57,24 @@ export function initHandTracking(callback) {
   });
 
   const camera = new Camera(video, {
-    onFrame: async () => await hands.send({ image: video }),
+    onFrame: async () => {
+      try {
+        await hands.send({ image: video });
+      } catch (e) {
+        console.warn("hands.send error", e);
+      }
+    },
     width: 640,
     height: 480
   });
 
-  camera.start();
+  try {
+    camera.start();
+    if (camStatusEl) camStatusEl.textContent = "camera-started";
+  } catch (e) {
+    console.error("Camera start failed", e);
+    if (camStatusEl) camStatusEl.textContent = "camera-error";
+  }
 }
 
 function distance(a, b) {

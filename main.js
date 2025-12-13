@@ -7,10 +7,14 @@ let currentShapeIndex = 0;
 const hudGesture = document.getElementById("hud-gesture");
 const hudExp = document.getElementById("hud-exp");
 const hudOpen = document.getElementById("hud-open");
+const hudCam = document.getElementById("hud-cam");
 
 initScene();
 initParticles(scene);
-initHandTracking(onGesture);
+initHandTracking((gesture, expansion, openness, direction) => {
+  if (hudCam) hudCam.textContent = "running";
+  onGesture(gesture, expansion, openness, direction);
+});
 
 animate();
 

@@ -2,9 +2,9 @@ export function heartShape(count) {
   return Array.from({ length: count }, () => {
     const t = Math.random() * Math.PI * 2;
     return {
-      x: 0.16 * Math.pow(Math.sin(t), 3),
-      y: 0.13 * Math.cos(t) - 0.05 * Math.cos(2*t),
-      z: (Math.random() - 0.5) * 0.2
+      x: 16 * Math.pow(Math.sin(t), 3) * 0.15,
+      y: (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t)) * 0.15,
+      z: (Math.random() - 0.5) * 0.5
     };
   });
 }

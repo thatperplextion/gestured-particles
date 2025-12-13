@@ -3,6 +3,10 @@ export function initHandTracking(callback) {
   const camStatusEl = document.getElementById("hud-cam");
   const overlay = document.getElementById("overlay");
   const ctx = overlay ? overlay.getContext("2d") : null;
+  // Smoothing
+  let smoothedExpansion = 1;
+  let smoothedOpenness = 0;
+  const EMA = 0.2; // exponential moving average factor
 
   const hands = new Hands({
     locateFile: file =>
@@ -27,6 +31,7 @@ export function initHandTracking(callback) {
     }
 
     const lm = results.multiHandLandmarks[0];
+    const handedness = results.multiHandedness && results.multiHandedness[0] ? results.multiHandedness[0].label : "Unknown";
 
     // Draw landmarks on overlay
     if (ctx && overlay) {
@@ -82,9 +87,12 @@ export function initHandTracking(callback) {
     const distanceScale = 1 / palmWidth; // larger when farther
     const expansionRaw = 0.9 + distanceScale * 0.6; // base + gain
     const expansion = Math.min(Math.max(expansionRaw, 0.7), 3.2);
+    // Smooth values with EMA for better visual stability
+    smoothedExpansion = smoothedExpansion + EMA * (expansion - smoothedExpansion);
 
     // Openness metric normalized 0..1 (higher means more open)
     const openness = Math.max(0, Math.min(1, (avgOpenNorm - 0.15) / 0.35));
+    smoothedOpenness = smoothedOpenness + EMA * (openness - smoothedOpenness);
 
     let gesture = "OPEN";
     if (pinchDistNorm < 0.30) gesture = "PINCH"; // normalized threshold
@@ -102,11 +110,11 @@ export function initHandTracking(callback) {
     if (Math.abs(vx) > SWIPE_THRESHOLD) {
       // With selfieMode, image x increases to the right relative to user
       const direction = vx > 0 ? "RIGHT" : "LEFT";
-      try { callback("SWIPE", expansion, openness, direction); } catch (e) { console.warn(e); }
+      try { callback("SWIPE", smoothedExpansion, smoothedOpenness, direction); } catch (e) { console.warn(e); }
       return;
     }
 
-    try { callback(gesture, expansion, openness); } catch (e) { console.warn(e); }
+    try { callback(gesture, smoothedExpansion, smoothedOpenness); } catch (e) { console.warn(e); }
   });
 
   const camera = new Camera(video, {

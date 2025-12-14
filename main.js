@@ -1,4 +1,4 @@
-import { initParticles, updateParticles, setShape, setColor, setMotion } from "./particles.js";
+import { initParticles, updateParticles, setShape, setColor, setMotion, setCenterOffset } from "./particles.js";
 import { initHandTracking } from "./gestures.js";
 
 let scene, camera, renderer;
@@ -12,9 +12,9 @@ let hudMotionLabel = document.getElementById("hud-motion");
 
 initScene();
 initParticles(scene);
-initHandTracking((gesture, expansion, openness, direction) => {
+initHandTracking((gesture, expansion, openness, direction, handPos) => {
   if (hudCam) hudCam.textContent = "running";
-  onGesture(gesture, expansion, openness, direction);
+  onGesture(gesture, expansion, openness, direction, handPos);
 });
 
 animate();
@@ -38,12 +38,17 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-function onGesture(gesture, expansion, openness, direction) {
+function onGesture(gesture, expansion, openness, direction, handPos) {
   // HUD debug
   if (hudGesture) hudGesture.textContent = gesture || "none";
   if (hudExp) hudExp.textContent = (expansion ?? 1).toFixed(2);
   if (hudOpen) hudOpen.textContent = (openness ?? 0).toFixed(2);
-  console.log("Gesture", { gesture, expansion, openness, direction });
+  console.log("Gesture", { gesture, expansion, openness, direction, handPos });
+
+  // Live follow: update center offset from palm position
+  if (handPos && typeof handPos.x === "number") {
+    setCenterOffset(handPos.x, handPos.y, handPos.z);
+  }
   // Map gestures to shapes
   if (gesture === "OPEN") setShape("heart", expansion);
   if (gesture === "FIST") setShape("saturn", expansion);

@@ -8,7 +8,8 @@
     /* Show preview in bottom-left for debugging */
     /* Mirror preview so it matches user perspective */
     video { position: fixed; bottom: 12px; left: 12px; width: 200px; height: 150px; border-radius: 8px; opacity: 0.8; object-fit: cover; transform: scaleX(-1); }
-    #overlay { position: fixed; bottom: 12px; left: 12px; width: 200px; height: 150px; pointer-events: none; transform: scaleX(-1); }
+    /* Do NOT mirror overlay; MediaPipe with selfieMode:true already mirrors landmark coords */
+    #overlay { position: fixed; bottom: 12px; left: 12px; width: 200px; height: 150px; pointer-events: none; }
     #hud { position: fixed; top: 12px; left: 12px; color: #fff; font-family: system-ui, Arial, sans-serif; font-size: 14px; background: rgba(0,0,0,0.35); padding: 8px 10px; border-radius: 8px; }
   </style>
 </head>

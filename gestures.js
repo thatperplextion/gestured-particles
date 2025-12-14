@@ -22,6 +22,11 @@ export function initHandTracking(callback) {
   });
 
   let firstResultTime = null;
+  // Simple stability buffer to avoid flicker: require N consecutive frames
+  let lastGesture = "OPEN";
+  let stableGesture = "OPEN";
+  let stableCount = 0;
+  const STABLE_FRAMES = 4;
   hands.onResults(results => {
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
 
@@ -96,8 +101,8 @@ export function initHandTracking(callback) {
 
     let gesture = "OPEN";
     if (pinchDistNorm < 0.30) gesture = "PINCH"; // normalized threshold
-    else if (avgOpenNorm < 0.28) gesture = "FIST"; // normalized threshold
-    else if (avgOpenNorm > 0.55) gesture = "OPEN"; // explicitly mark open when wide
+    else if (avgOpenNorm < 0.32) gesture = "FIST"; // slightly looser for fist
+    else if (avgOpenNorm > 0.52) gesture = "OPEN"; // explicitly mark open when wide
 
     // Swipe detection using wrist horizontal velocity
     // Keep a simple static cache on the function for previous wrist X
@@ -116,7 +121,18 @@ export function initHandTracking(callback) {
 
     // Provide live hand position (palm/wrist) normalized to screen
     const handPos = { x: palm.x, y: palm.y, z: palm.z };
-    try { callback(gesture, smoothedExpansion, smoothedOpenness, undefined, handPos); } catch (e) { console.warn(e); }
+    // Debounce: only emit when stable for STABLE_FRAMES
+    if (gesture === lastGesture) {
+      stableCount = Math.min(stableCount + 1, STABLE_FRAMES);
+    } else {
+      stableCount = 0;
+    }
+    lastGesture = gesture;
+    if (stableCount >= STABLE_FRAMES) {
+      if (gesture !== stableGesture) stableGesture = gesture;
+    }
+
+    try { callback(stableGesture, smoothedExpansion, smoothedOpenness, undefined, handPos); } catch (e) { console.warn(e); }
   });
 
   const camera = new Camera(video, {

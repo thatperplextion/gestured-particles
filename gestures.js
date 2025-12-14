@@ -114,7 +114,9 @@ export function initHandTracking(callback) {
       return;
     }
 
-    try { callback(gesture, smoothedExpansion, smoothedOpenness); } catch (e) { console.warn(e); }
+    // Provide live hand position (palm/wrist) normalized to screen
+    const handPos = { x: palm.x, y: palm.y, z: palm.z };
+    try { callback(gesture, smoothedExpansion, smoothedOpenness, undefined, handPos); } catch (e) { console.warn(e); }
   });
 
   const camera = new Camera(video, {

@@ -9,6 +9,7 @@ let material;
 let jitterOffsets;
 let time = 0;
 let motionMode = "pulse"; // pulse | orbit | swirl
+let centerOffset = { x: 0, y: 0, z: 0 };
 
 export function initParticles(scene) {
   geometry = new THREE.BufferGeometry();
@@ -55,6 +56,14 @@ export function setMotion(mode) {
   motionMode = mode;
 }
 
+export function setCenterOffset(normX, normY, normZ = 0) {
+  // Convert normalized hand coords (0..1) to scene space: center at (0,0)
+  // Map x in [0,1] to [-2, 2], y in [0,1] to [2, -2] (invert y)
+  centerOffset.x = (normX - 0.5) * 4;
+  centerOffset.y = (0.5 - normY) * 4;
+  centerOffset.z = normZ * 2;
+}
+
 export function updateParticles() {
   const pos = geometry.attributes.position.array;
 
@@ -68,9 +77,9 @@ export function updateParticles() {
     const targetZ = targetPositions[i].z * currentExpansion;
 
     // Base morphing
-    pos[i*3] += (targetX - pos[i*3]) * 0.05;
-    pos[i*3+1] += (targetY - pos[i*3+1]) * 0.05;
-    pos[i*3+2] += (targetZ - pos[i*3+2]) * 0.05;
+    pos[i*3] += ((targetX + centerOffset.x) - pos[i*3]) * 0.05;
+    pos[i*3+1] += ((targetY + centerOffset.y) - pos[i*3+1]) * 0.05;
+    pos[i*3+2] += ((targetZ + centerOffset.z) - pos[i*3+2]) * 0.05;
 
     // Sparkle jitter (subtle) using per-particle offsets animated over time
     const jx = jitterOffsets[i*3] * 0.02 * Math.sin(time + i * 0.001);

@@ -2,30 +2,141 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Gesture Controlled 3D Particles</title>
   <style>
-    body { margin: 0; overflow: hidden; background: black; }
-    /* Show preview in bottom-left for debugging */
-    /* Mirror preview so it matches user perspective */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { width: 100vw; height: 100vh; overflow: hidden; background: #000; font-family: system-ui, Arial; }
+    canvas { display: block; width: 100%; height: 100%; }
     video { position: fixed; bottom: 12px; left: 12px; width: 200px; height: 150px; border-radius: 8px; opacity: 0.8; object-fit: cover; transform: scaleX(-1); }
-    /* Do NOT mirror overlay; MediaPipe with selfieMode:true already mirrors landmark coords */
     #overlay { position: fixed; bottom: 12px; left: 12px; width: 200px; height: 150px; pointer-events: none; }
-    #hud { position: fixed; top: 12px; left: 12px; color: #fff; font-family: system-ui, Arial, sans-serif; font-size: 14px; background: rgba(0,0,0,0.35); padding: 8px 10px; border-radius: 8px; }
+    #hud { position: fixed; top: 12px; left: 12px; color: #fff; font-size: 13px; background: rgba(0,0,0,0.5); padding: 8px 12px; border-radius: 6px; font-family: monospace; z-index: 10; }
   </style>
 </head>
 <body>
+  <video id="video" autoplay muted playsinline></video>
+  <canvas id="overlay" width="200" height="150"></canvas>
+  <div id="hud">Initializing...</div>
 
-<video id="video" autoplay muted playsinline></video>
-<canvas id="overlay" width="200" height="150"></canvas>
+  <!-- Three.js -->
+  <script async src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-<div id="hud">Cam: <span id="hud-cam">starting</span> · Gesture: <span id="hud-gesture">none</span> · Expansion: <span id="hud-exp">1.0</span> · Openness: <span id="hud-open">0.0</span> · <span id="hud-motion"></span></div>
+  <!-- MediaPipe -->
+  <script async src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424926/hands.js"></script>
+  <script async src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.4.1646424926/camera_utils.js"></script>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script type="module">
+    // Wait for Three.js and MediaPipe to load
+    let retries = 0;
+    const waitForDeps = setInterval(() => {
+      if (typeof THREE !== 'undefined' && typeof Hands !== 'undefined' && typeof Camera !== 'undefined') {
+        clearInterval(waitForDeps);
+        initApp();
+      } else if (retries++ > 100) {
+        console.error("Failed to load dependencies");
+        clearInterval(waitForDeps);
+        document.getElementById('hud').textContent = "Error: Failed to load libraries";
+      }
+    }, 50);
 
-<!-- MediaPipe -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    async function initApp() {
+      try {
+        // Lazy-load modules
+        const { initParticles, updateParticles, setShape, setColor, setMotion, setCenterOffset, setBlendWeights } = await import('./particles.js');
+        const { initHandTracking } = await import('./gestures.js');
 
-<script type="module" src="main.js"></script>
+        let scene, camera, renderer;
+
+        // THREE.js Scene
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 8;
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x000000, 1);
+        document.body.appendChild(renderer.domElement);
+
+        // Initialize particles
+        initParticles(scene);
+
+        // Initialize hand tracking
+        let shapeOrder = ["heart", "flower", "saturn", "fireworks"];
+        let currentShapeIndex = 0;
+        const hudEl = document.getElementById('hud');
+
+        initHandTracking((gesture, expansion, openness, direction, handPos) => {
+          if (hudEl) {
+            hudEl.innerHTML = `Gesture: <b>${gesture}</b> | Exp: ${(expansion ?? 1).toFixed(1)} | Open: ${(openness ?? 0).toFixed(1)}`;
+          }
+
+          // Live hand follow
+          if (handPos && typeof handPos.x === 'number') {
+            setCenterOffset(handPos.x, handPos.y, handPos.z);
+          }
+
+          // Continuous blend
+          const wHeart = Math.max(0, Math.min(1, openness));
+          const wFlower = Math.max(0, Math.min(1, (openness - 0.4) * 1.7));
+          const wSaturn = gesture === 'FIST' ? 0.8 : Math.max(0, 0.2 - openness * 0.2);
+          const wFire = gesture === 'PINCH' ? 0.9 : Math.max(0, (0.3 - openness) * 0.3);
+          let sum = wHeart + wFlower + wSaturn + wFire;
+          if (sum < 1e-6) sum = 1;
+          setBlendWeights({
+            heart: wHeart / sum,
+            flower: wFlower / sum,
+            saturn: wSaturn / sum,
+            fireworks: wFire / sum
+          });
+
+          // Motion modes
+          if (gesture === 'OPEN') setMotion('pulse');
+          if (gesture === 'FIST') setMotion('orbit');
+          if (gesture === 'PINCH') setMotion('swirl');
+
+          // Swipe cycles shapes
+          if (gesture === 'SWIPE') {
+            if (direction === 'RIGHT') currentShapeIndex = (currentShapeIndex + 1) % shapeOrder.length;
+            else if (direction === 'LEFT') currentShapeIndex = (currentShapeIndex - 1 + shapeOrder.length) % shapeOrder.length;
+            setShape(shapeOrder[currentShapeIndex], expansion);
+          }
+
+          // Color from openness
+          const hex = Math.round(0xff66cc * (0.5 + openness * 0.5)) | 0;
+          setColor(hex);
+        });
+
+        // Animation loop
+        function animate() {
+          requestAnimationFrame(animate);
+          updateParticles();
+          renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Keyboard controls
+        window.addEventListener('keydown', (e) => {
+          if (e.key === '1') setShape('heart', 1);
+          if (e.key === '2') setShape('flower', 1);
+          if (e.key === '3') setShape('saturn', 1);
+          if (e.key === '4') setShape('fireworks', 1);
+          if (e.key === 'q') setMotion('pulse');
+          if (e.key === 'w') setMotion('orbit');
+          if (e.key === 'e') setMotion('swirl');
+        });
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById('hud').textContent = "Error: " + err.message;
+      }
+    }
+  </script>
 </body>
+</html>
 </html>

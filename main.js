@@ -1,4 +1,4 @@
-import { initParticles, updateParticles, setShape, setColor, setMotion, setCenterOffset } from "./particles.js";
+import { initParticles, updateParticles, setShape, setColor, setMotion, setCenterOffset, setBlendWeights } from "./particles.js";
 import { initHandTracking } from "./gestures.js";
 
 let scene, camera, renderer;
@@ -49,6 +49,24 @@ function onGesture(gesture, expansion, openness, direction, handPos) {
   if (handPos && typeof handPos.x === "number") {
     setCenterOffset(handPos.x, handPos.y, handPos.z);
   }
+
+  // Continuous blend mapping
+  // Base weights from openness: open favors heart/flower
+  const wHeart = Math.max(0, Math.min(1, openness));
+  const wFlower = Math.max(0, Math.min(1, (openness - 0.4) * 1.7));
+  // Fist increases saturn weight
+  const wSaturn = gesture === "FIST" ? 0.8 : Math.max(0, 0.2 - openness * 0.2);
+  // Pinch increases fireworks
+  const wFire = gesture === "PINCH" ? 0.9 : Math.max(0, (0.3 - openness) * 0.3);
+  // Normalize weights
+  let sum = wHeart + wFlower + wSaturn + wFire;
+  if (sum < 1e-6) sum = 1;
+  setBlendWeights({
+    heart: wHeart / sum,
+    flower: wFlower / sum,
+    saturn: wSaturn / sum,
+    fireworks: wFire / sum
+  });
   // Map gestures to shapes
   if (gesture === "OPEN") setShape("heart", expansion);
   if (gesture === "FIST") setShape("saturn", expansion);

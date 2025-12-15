@@ -6,6 +6,8 @@ export function initHandTracking(callback) {
   // Smoothing
   let smoothedExpansion = 1;
   let smoothedOpenness = 0;
+    let prevPalm = null;
+    let palmVel = { x: 0, y: 0 };
   const EMA = 0.2; // exponential moving average factor
 
   const hands = new Hands({
@@ -132,6 +134,14 @@ export function initHandTracking(callback) {
       if (gesture !== stableGesture) stableGesture = gesture;
     }
 
+      // Compute palm velocity
+      if (prevPalm) {
+        palmVel.x = palm.x - prevPalm.x;
+        palmVel.y = palm.y - prevPalm.y;
+      }
+      prevPalm = { x: palm.x, y: palm.y };
+
+      const handPos = { x: palm.x, y: palm.y, z: palm.z, vx: palmVel.x, vy: palmVel.y };
     try { callback(stableGesture, smoothedExpansion, smoothedOpenness, undefined, handPos); } catch (e) { console.warn(e); }
   });
 

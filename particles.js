@@ -2,6 +2,11 @@ import { heartShape, saturnShape, fireworksShape, flowerShape } from "./shapes.j
 
 let points, geometry;
 let targetPositions = [];
+let shapeHeart = [];
+let shapeSaturn = [];
+let shapeFlower = [];
+let shapeFireworks = [];
+let blend = { heart: 1, saturn: 0, flower: 0, fireworks: 0 };
 let currentExpansion = 1;
 let targetExpansion = 1;
 const COUNT = 2000;
@@ -10,6 +15,7 @@ let jitterOffsets;
 let time = 0;
 let motionMode = "pulse"; // pulse | orbit | swirl
 let centerOffset = { x: 0, y: 0, z: 0 };
+let handVel = { x: 0, y: 0 };
 
 export function initParticles(scene) {
   geometry = new THREE.BufferGeometry();
@@ -28,6 +34,12 @@ export function initParticles(scene) {
   points = new THREE.Points(geometry, material);
   scene.add(points);
 
+  // Precompute base shapes once for blending
+  shapeHeart = heartShape(COUNT);
+  shapeSaturn = saturnShape(COUNT);
+  shapeFlower = flowerShape(COUNT);
+  shapeFireworks = fireworksShape(COUNT);
+
   setShape("heart", 1);
 
   // Initialize small per-particle jitter offsets
@@ -40,10 +52,10 @@ export function initParticles(scene) {
 }
 
 export function setShape(type, expansion = 1) {
-  if (type === "heart") targetPositions = heartShape(COUNT);
-  if (type === "saturn") targetPositions = saturnShape(COUNT);
-  if (type === "fireworks") targetPositions = fireworksShape(COUNT);
-  if (type === "flower") targetPositions = flowerShape(COUNT);
+  if (type === "heart") targetPositions = shapeHeart;
+  if (type === "saturn") targetPositions = shapeSaturn;
+  if (type === "fireworks") targetPositions = shapeFireworks;
+  if (type === "flower") targetPositions = shapeFlower;
   targetExpansion = expansion;
 }
 
@@ -59,9 +71,18 @@ export function setMotion(mode) {
 export function setCenterOffset(normX, normY, normZ = 0) {
   // Convert normalized hand coords (0..1) to scene space: center at (0,0)
   // Map x in [0,1] to [-2, 2], y in [0,1] to [2, -2] (invert y)
-  centerOffset.x = (normX - 0.5) * 4;
-  centerOffset.y = (0.5 - normY) * 4;
+  const newX = (normX - 0.5) * 4;
+  const newY = (0.5 - normY) * 4;
+  handVel.x = newX - centerOffset.x;
+  handVel.y = newY - centerOffset.y;
+  centerOffset.x = newX;
+  centerOffset.y = newY;
   centerOffset.z = normZ * 2;
+}
+
+export function setBlendWeights(weights) {
+  // weights: {heart, saturn, flower, fireworks} should sum to ~1
+  blend = weights;
 }
 
 export function updateParticles() {
@@ -71,15 +92,39 @@ export function updateParticles() {
   currentExpansion += (targetExpansion - currentExpansion) * 0.08;
   time += 0.02;
 
+  // Adaptive follow gain based on hand velocity magnitude
+  const speed = Math.sqrt(handVel.x * handVel.x + handVel.y * handVel.y);
+  const followGain = Math.min(0.08 + speed * 0.02, 0.18);
+
   for (let i = 0; i < COUNT; i++) {
-    const targetX = targetPositions[i].x * currentExpansion;
-    const targetY = targetPositions[i].y * currentExpansion;
-    const targetZ = targetPositions[i].z * currentExpansion;
+    // Continuous shape blending
+    const bx = (
+      (shapeHeart[i].x * (blend.heart || 0)) +
+      (shapeSaturn[i].x * (blend.saturn || 0)) +
+      (shapeFlower[i].x * (blend.flower || 0)) +
+      (shapeFireworks[i].x * (blend.fireworks || 0))
+    );
+    const by = (
+      (shapeHeart[i].y * (blend.heart || 0)) +
+      (shapeSaturn[i].y * (blend.saturn || 0)) +
+      (shapeFlower[i].y * (blend.flower || 0)) +
+      (shapeFireworks[i].y * (blend.fireworks || 0))
+    );
+    const bz = (
+      (shapeHeart[i].z * (blend.heart || 0)) +
+      (shapeSaturn[i].z * (blend.saturn || 0)) +
+      (shapeFlower[i].z * (blend.flower || 0)) +
+      (shapeFireworks[i].z * (blend.fireworks || 0))
+    );
+
+    const targetX = bx * currentExpansion + centerOffset.x;
+    const targetY = by * currentExpansion + centerOffset.y;
+    const targetZ = bz * currentExpansion + centerOffset.z;
 
     // Base morphing
-    pos[i*3] += ((targetX + centerOffset.x) - pos[i*3]) * 0.05;
-    pos[i*3+1] += ((targetY + centerOffset.y) - pos[i*3+1]) * 0.05;
-    pos[i*3+2] += ((targetZ + centerOffset.z) - pos[i*3+2]) * 0.05;
+    pos[i*3] += (targetX - pos[i*3]) * followGain;
+    pos[i*3+1] += (targetY - pos[i*3+1]) * followGain;
+    pos[i*3+2] += (targetZ - pos[i*3+2]) * followGain;
 
     // Sparkle jitter (subtle) using per-particle offsets animated over time
     const jx = jitterOffsets[i*3] * 0.02 * Math.sin(time + i * 0.001);

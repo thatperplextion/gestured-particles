@@ -88,17 +88,40 @@ export function initHandTracking(callback) {
     const palmRight = lm[17]; // pinky MCP
     const palmWidth = Math.max(distance(palmLeft, palmRight), 1e-6);
 
-    const pinchDistNorm = distance(thumbTip, indexTip) / palmWidth;
-    // Use average fingertip-to-palm distance for openness, normalized
+    // FIVE-FINGER COMPRESSION DETECTION
+    // Measure all fingertip-to-palm distances for compression level
+    const indexDist = distance(indexTip, palm);
     const middleTip = lm[12];
     const ringTip = lm[16];
     const pinkyTip = lm[20];
-    const avgOpenNorm = (
-      distance(indexTip, palm) +
-      distance(middleTip, palm) +
-      distance(ringTip, palm) +
-      distance(pinkyTip, palm)
-    ) / (4 * palmWidth);
+    const middleDist = distance(middleTip, palm);
+    const ringDist = distance(ringTip, palm);
+    const pinkyDist = distance(pinkyTip, palm);
+    const thumbDist = distance(thumbTip, palm);
+    
+    // Average all five fingertip distances (compression metric)
+    const allFingerDists = [thumbDist, indexDist, middleDist, ringDist, pinkyDist];
+    const avgFingerDist = allFingerDists.reduce((a, b) => a + b) / 5;
+    const avgFingerDistNorm = avgFingerDist / palmWidth;
+    
+    // Compression ratio: how close fingers are to palm (0 = fully closed, 1 = fully open)
+    const compressionRatio = Math.max(0, Math.min(1, (avgFingerDistNorm - 0.12) / 0.50));
+    
+    // Five-finger expansion modifier: compressing all fingers contracts, opening expands
+    let fiveFingerExpansionModifier = 1;
+    if (compressionRatio < 0.35) {
+      // Tight five-finger compression: maximum contraction
+      fiveFingerExpansionModifier = 0.5 + (compressionRatio / 0.35) * 0.5; // range 0.5 to 1.0
+    } else if (compressionRatio > 0.60) {
+      // Open hand: maximum expansion
+      fiveFingerExpansionModifier = Math.min(1 + (compressionRatio - 0.60) * 3, 3.0); // range 1.0 to 3.0
+    } else {
+      // Mid-range: smooth transition
+      fiveFingerExpansionModifier = 0.75 + (compressionRatio - 0.35) * 1.0; // range 0.75 to 1.75
+    }
+    
+    // Use average fingertip-to-palm distance for openness, normalized
+    const avgOpenNorm = (indexDist + middleDist + ringDist + pinkyDist) / (4 * palmWidth);
     
     // Hand size (distance from wrist to middle finger base) indicates distance from camera
     const handSize = distance(wrist, middleBase);
@@ -107,20 +130,8 @@ export function initHandTracking(callback) {
     const expansionRaw = 0.9 + distanceScale * 0.6; // base + gain
     const expansion = Math.min(Math.max(expansionRaw, 0.7), 3.2);
     
-    // PINCH EXPANSION: Use pinch distance to control particle expansion
-    // When pinching tight (pinchDistNorm < 0.2): expansion contracts
-    // When fingers apart (pinchDistNorm > 0.5): expansion increases
-    let pinchExpansionModifier = 1;
-    if (pinchDistNorm < 0.28) {
-      // Tight pinch: contract particles
-      pinchExpansionModifier = 0.6 + (pinchDistNorm / 0.28) * 0.4; // range 0.6 to 1.0
-    } else if (pinchDistNorm > 0.35) {
-      // Loose pinch/fingers apart: expand particles
-      pinchExpansionModifier = Math.min(1 + (pinchDistNorm - 0.35) * 2, 2.5); // range 1.0 to 2.5
-    }
-    
-    // Apply pinch expansion modifier to final expansion
-    const finalExpansion = expansion * pinchExpansionModifier;
+    // Apply five-finger compression modifier to final expansion
+    const finalExpansion = expansion * fiveFingerExpansionModifier;
 
     // Openness metric normalized 0..1 (higher means more open)
     const openness = Math.max(0, Math.min(1, (avgOpenNorm - 0.12) / 0.40));
@@ -131,6 +142,20 @@ export function initHandTracking(callback) {
     const adaptiveSmoothFactor = baseSmoothFactor + Math.min(palmMovement * 2, maxSmoothFactor - baseSmoothFactor);
     
     smoothedExpansion += adaptiveSmoothFactor * (finalExpansion - smoothedExpansion);
+    
+    // GESTURE CLASSIFICATION based on five-finger compression
+    let gesture = "OPEN";
+    if (compressionRatio < 0.30) {
+      // Fully closed fist/compression
+      gesture = "FIST";
+    } else if (compressionRatio < 0.45) {
+      // Moderate compression (pinch-like state)
+      gesture = "PINCH";
+    } else {
+      // Open hand
+      gesture = "OPEN";
+    }
+    
     // Swipe detection using wrist horizontal velocity (momentum-based)
     if (!initHandTracking._prevWristX) initHandTracking._prevWristX = wrist.x;
     if (!initHandTracking._swipeVelocity) initHandTracking._swipeVelocity = 0;
@@ -151,8 +176,8 @@ export function initHandTracking(callback) {
     // Gesture history buffer for confident multi-frame validation
     gestureHistory.push({
       gesture: gesture,
-      pinch: pinchDistNorm,
-      openness: avgOpenNorm
+      compression: compressionRatio,
+      openness: openness
     });
     if (gestureHistory.length > gestureBufferSize) gestureHistory.shift();
 

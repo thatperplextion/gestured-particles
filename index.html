@@ -67,7 +67,7 @@
 
         initHandTracking((gesture, expansion, openness, direction, handPos) => {
           if (hudEl) {
-            hudEl.innerHTML = `Gesture: <b>${gesture}</b> | Exp: ${(expansion ?? 1).toFixed(1)} | Open: ${(openness ?? 0).toFixed(1)} | Pinch Control: ${gesture === 'PINCH' ? '🎯' : ''}`;
+            hudEl.innerHTML = `Gesture: <b>${gesture}</b> | Exp: ${(expansion ?? 1).toFixed(1)} | Open: ${(openness ?? 0).toFixed(1)} | 5-Finger Control: 🖐️`;
           }
 
           // Live hand follow with smooth centering
@@ -76,18 +76,18 @@
             setCenterOffset(handPos.x, handPos.y, handPos.z);
           }
 
-          // PINCH EXPANSION/REDUCTION: Directly control particle size with thumb-index distance
-          if (gesture === 'PINCH') {
-            // Expansion is already modified by pinch distance in gestures.js
-            // Just pass it directly for pinch expansion/reduction
-            setShape(shapeOrder[currentShapeIndex], expansion);
-          }
+          // FIVE-FINGER EXPANSION/REDUCTION: Direct control with all fingers
+          // Compress all fingers = contract, open all fingers = expand
+          setShape(shapeOrder[currentShapeIndex], expansion);
 
-          // Continuous blend based on hand openness
+          // Continuous blend based on five-finger compression state
+          // All fingers compressed → fireworks/swirl
+          // Fingers moderately compressed → pinch/spiral
+          // All fingers open → heart/pulse with expansion
           const wHeart = Math.max(0, Math.min(1, openness * 1.2));
           const wFlower = Math.max(0, Math.min(1, (openness - 0.3) * 1.5));
           const wSaturn = gesture === 'FIST' ? 0.85 : Math.max(0, 0.15 - openness * 0.15);
-          const wFire = gesture === 'PINCH' ? 0.8 : Math.max(0, (0.25 - openness) * 0.35);
+          const wFire = gesture === 'PINCH' || gesture === 'FIST' ? (gesture === 'FIST' ? 0.9 : 0.7) : Math.max(0, (0.25 - openness) * 0.35);
           let sum = wHeart + wFlower + wSaturn + wFire;
           if (sum < 1e-6) sum = 1;
           setBlendWeights({
@@ -97,13 +97,16 @@
             fireworks: wFire / sum
           });
 
-          // Motion modes based on gesture type
+          // Motion modes based on five-finger compression state
           if (gesture === 'OPEN') {
+            // All fingers open: gentle pulse
             setMotion('pulse');
-          } else if (gesture === 'FIST') {
-            setMotion('orbit');
           } else if (gesture === 'PINCH') {
+            // Moderate compression: spiral swirl
             setMotion('swirl');
+          } else if (gesture === 'FIST') {
+            // All fingers closed: fast orbit
+            setMotion('orbit');
           }
 
           // Swipe to cycle shapes
@@ -116,23 +119,23 @@
             setShape(shapeOrder[currentShapeIndex], expansion);
           }
 
-          // Dynamic color: varies with openness and gesture
+          // Dynamic color: varies with five-finger compression and hand openness
           let hue, saturation, brightness;
-          if (gesture === 'PINCH') {
-            // Pinch: cyan to magenta based on pinch tightness
-            hue = 280 + openness * 80; // 280-360 (magenta region)
-            saturation = 1;
-            brightness = 0.6 + expansion * 0.1;
-          } else if (gesture === 'FIST') {
-            // Fist: purple to blue
-            hue = 240 + openness * 40;
+          if (gesture === 'FIST') {
+            // Fully compressed: deep red/magenta
+            hue = 300 + openness * 40;
+            saturation = 0.95;
+            brightness = 0.5 + expansion * 0.15;
+          } else if (gesture === 'PINCH') {
+            // Moderately compressed: purple to blue
+            hue = 240 + openness * 50;
             saturation = 0.9;
-            brightness = 0.5 + openness * 0.3;
+            brightness = 0.55 + openness * 0.25;
           } else {
-            // Open: pink to cyan
-            hue = 300 + openness * 100;
+            // Fully open: cyan to pink (rainbow effect)
+            hue = 180 + openness * 120;
             saturation = 1;
-            brightness = 0.6 + openness * 0.2;
+            brightness = 0.65 + openness * 0.25;
           }
           
           // Convert HSB to hex

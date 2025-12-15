@@ -1,6 +1,6 @@
 export function initHandTracking(callback) {
   const video = document.getElementById("video");
-  const camStatusEl = document.getElementById("hud-cam");
+  const hudEl = document.getElementById("hud");
   const overlay = document.getElementById("overlay");
   const ctx = overlay ? overlay.getContext("2d") : null;
   // Smoothing
@@ -34,7 +34,7 @@ export function initHandTracking(callback) {
 
     if (!firstResultTime) {
       firstResultTime = performance.now();
-      if (camStatusEl) camStatusEl.textContent = "results";
+      if (hudEl) hudEl.textContent = "results";
     }
 
     const lm = results.multiHandLandmarks[0];
@@ -122,7 +122,6 @@ export function initHandTracking(callback) {
     }
 
     // Provide live hand position (palm/wrist) normalized to screen
-    const handPos = { x: palm.x, y: palm.y, z: palm.z };
     // Debounce: only emit when stable for STABLE_FRAMES
     if (gesture === lastGesture) {
       stableCount = Math.min(stableCount + 1, STABLE_FRAMES);
@@ -134,14 +133,14 @@ export function initHandTracking(callback) {
       if (gesture !== stableGesture) stableGesture = gesture;
     }
 
-      // Compute palm velocity
-      if (prevPalm) {
-        palmVel.x = palm.x - prevPalm.x;
-        palmVel.y = palm.y - prevPalm.y;
-      }
-      prevPalm = { x: palm.x, y: palm.y };
+    // Compute palm velocity
+    if (prevPalm) {
+      palmVel.x = palm.x - prevPalm.x;
+      palmVel.y = palm.y - prevPalm.y;
+    }
+    prevPalm = { x: palm.x, y: palm.y };
 
-      const handPos = { x: palm.x, y: palm.y, z: palm.z, vx: palmVel.x, vy: palmVel.y };
+    const handPos = { x: palm.x, y: palm.y, z: palm.z, vx: palmVel.x, vy: palmVel.y };
     try { callback(stableGesture, smoothedExpansion, smoothedOpenness, undefined, handPos); } catch (e) { console.warn(e); }
   });
 
@@ -151,10 +150,10 @@ export function initHandTracking(callback) {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 }, audio: false });
       video.srcObject = stream;
       await video.play();
-      if (camStatusEl) camStatusEl.textContent = "stream-started";
+      if (hudEl) hudEl.textContent = "stream-started";
     } catch (err) {
       console.error("getUserMedia error", err);
-      if (camStatusEl) camStatusEl.textContent = "camera-error";
+      if (hudEl) hudEl.textContent = "camera-error";
     }
   };
 
@@ -174,10 +173,10 @@ export function initHandTracking(callback) {
     await startStream();
     try {
       camera.start();
-      if (camStatusEl) camStatusEl.textContent = "camera-started";
+      if (hudEl) hudEl.textContent = "camera-started";
     } catch (e) {
       console.error("Camera start failed", e);
-      if (camStatusEl) camStatusEl.textContent = "camera-error";
+      if (hudEl) hudEl.textContent = "camera-error";
     }
   })();
 }

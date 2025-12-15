@@ -73,18 +73,18 @@ export function setColor(hex) {
 
 export function setCenterOffset(normX, normY, normZ = 0) {
   // Convert normalized hand coords (0..1) to scene space: center at (0,0)
-  // Map x in [0,1] to [-2.5, 2.5], y in [0,1] to [2.5, -2.5] (invert y)
-  const newX = (normX - 0.5) * 5;
-  const newY = (0.5 - normY) * 5;
+  // Extended range for better placement: [-3, 3] for wider coverage
+  const newX = (normX - 0.5) * 6;
+  const newY = (0.5 - normY) * 6;
   
   // Smooth velocity computation for smooth hand following
   handVel.x = (newX - centerOffset.x) * 0.7 + handVel.x * 0.3;
   handVel.y = (newY - centerOffset.y) * 0.7 + handVel.y * 0.3;
   
-  // Smooth offset transition
-  centerOffset.x += (newX - centerOffset.x) * 0.15;
-  centerOffset.y += (newY - centerOffset.y) * 0.15;
-  centerOffset.z += (normZ * 2 - centerOffset.z) * 0.15;
+  // Faster offset transition for more responsive pinch control
+  centerOffset.x += (newX - centerOffset.x) * 0.2;
+  centerOffset.y += (newY - centerOffset.y) * 0.2;
+  centerOffset.z += (normZ * 2 - centerOffset.z) * 0.2;
 } handVel.y = newY - centerOffset.y;
   centerOffset.x = newX;
   centerOffset.y = newY;

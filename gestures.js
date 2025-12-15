@@ -106,8 +106,21 @@ export function initHandTracking(callback) {
     const distanceScale = 1 / palmWidth; // larger when farther
     const expansionRaw = 0.9 + distanceScale * 0.6; // base + gain
     const expansion = Math.min(Math.max(expansionRaw, 0.7), 3.2);
-    // Smooth values with EMA for better visual stability
-    smoothedExpansion = smoothedExpansion + EMA * (expansion - smoothedExpansion);
+    
+    // PINCH EXPANSION: Use pinch distance to control particle expansion
+    // When pinching tight (pinchDistNorm < 0.2): expansion contracts
+    // When fingers apart (pinchDistNorm > 0.5): expansion increases
+    let pinchExpansionModifier = 1;
+    if (pinchDistNorm < 0.28) {
+      // Tight pinch: contract particles
+      pinchExpansionModifier = 0.6 + (pinchDistNorm / 0.28) * 0.4; // range 0.6 to 1.0
+    } else if (pinchDistNorm > 0.35) {
+      // Loose pinch/fingers apart: expand particles
+      pinchExpansionModifier = Math.min(1 + (pinchDistNorm - 0.35) * 2, 2.5); // range 1.0 to 2.5
+    }
+    
+    // Apply pinch expansion modifier to final expansion
+    const finalExpansion = expansion * pinchExpansionModifier;
 
     // Openness metric normalized 0..1 (higher means more open)
     const openness = Math.max(0, Math.min(1, (avgOpenNorm - 0.12) / 0.40));
@@ -117,7 +130,7 @@ export function initHandTracking(callback) {
       Math.sqrt((palm.x - prevPalm.x)**2 + (palm.y - prevPalm.y)**2) : 0;
     const adaptiveSmoothFactor = baseSmoothFactor + Math.min(palmMovement * 2, maxSmoothFactor - baseSmoothFactor);
     
-    smoothedExpansion += adaptiveSmoothFactor * (expansion - smoothedExpansion);
+    smoothedExpansion += adaptiveSmoothFactor * (finalExpansion - smoothedExpansion);
     // Swipe detection using wrist horizontal velocity (momentum-based)
     if (!initHandTracking._prevWristX) initHandTracking._prevWristX = wrist.x;
     if (!initHandTracking._swipeVelocity) initHandTracking._swipeVelocity = 0;

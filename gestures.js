@@ -145,6 +145,19 @@ export function initHandTracking(callback) {
     try { callback(stableGesture, smoothedExpansion, smoothedOpenness, undefined, handPos); } catch (e) { console.warn(e); }
   });
 
+  // Fallback: ensure getUserMedia starts the video stream before MediaPipe Camera
+  const startStream = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 }, audio: false });
+      video.srcObject = stream;
+      await video.play();
+      if (camStatusEl) camStatusEl.textContent = "stream-started";
+    } catch (err) {
+      console.error("getUserMedia error", err);
+      if (camStatusEl) camStatusEl.textContent = "camera-error";
+    }
+  };
+
   const camera = new Camera(video, {
     onFrame: async () => {
       try {
@@ -157,13 +170,16 @@ export function initHandTracking(callback) {
     height: 480
   });
 
-  try {
-    camera.start();
-    if (camStatusEl) camStatusEl.textContent = "camera-started";
-  } catch (e) {
-    console.error("Camera start failed", e);
-    if (camStatusEl) camStatusEl.textContent = "camera-error";
-  }
+  (async () => {
+    await startStream();
+    try {
+      camera.start();
+      if (camStatusEl) camStatusEl.textContent = "camera-started";
+    } catch (e) {
+      console.error("Camera start failed", e);
+      if (camStatusEl) camStatusEl.textContent = "camera-error";
+    }
+  })();
 }
 
 function distance(a, b) {

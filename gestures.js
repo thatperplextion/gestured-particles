@@ -42,7 +42,10 @@ export function initHandTracking(callback) {
   let stableCount = 0;
   const STABLE_FRAMES = 4;
   hands.onResults(results => {
-    if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) return;
+    if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+      if (hudEl) hudEl.innerHTML = `<span style="color:#ff6b6b">❌ No hand detected - Move closer to camera</span>`;
+      return;
+    }
 
     if (!firstResultTime) {
       firstResultTime = performance.now();
@@ -159,18 +162,23 @@ export function initHandTracking(callback) {
     // Swipe detection using wrist horizontal velocity (momentum-based)
     if (!initHandTracking._prevWristX) initHandTracking._prevWristX = wrist.x;
     if (!initHandTracking._swipeVelocity) initHandTracking._swipeVelocity = 0;
+    if (!initHandTracking._lastSwipeTime) initHandTracking._lastSwipeTime = 0;
     
     const vx = wrist.x - initHandTracking._prevWristX;
     initHandTracking._swipeVelocity = vx * 0.7 + initHandTracking._swipeVelocity * 0.3; // momentum smoothing
     initHandTracking._prevWristX = wrist.x;
 
-    // Higher swipe threshold for more deliberate swipes
-    const SWIPE_THRESHOLD = 0.08;
+    // Swipe threshold - lower for easier detection
+    const SWIPE_THRESHOLD = 0.06;
     let swipeDirection = null;
-    if (Math.abs(initHandTracking._swipeVelocity) > SWIPE_THRESHOLD && gesture === "OPEN") {
+    const now = Date.now();
+    
+    // Allow swipe in any gesture state, but require 500ms between swipes
+    if (Math.abs(initHandTracking._swipeVelocity) > SWIPE_THRESHOLD && (now - initHandTracking._lastSwipeTime > 500)) {
       // In selfie mode: positive velocity = leftward swipe
       swipeDirection = initHandTracking._swipeVelocity > 0 ? "LEFT" : "RIGHT";
       initHandTracking._swipeVelocity = 0; // reset after detection
+      initHandTracking._lastSwipeTime = now;
     }
 
     // Gesture history buffer for confident multi-frame validation
@@ -206,10 +214,13 @@ export function initHandTracking(callback) {
     smoothedPalmY += adaptiveSmoothFactor * (palm.y - smoothedPalmY);
     smoothedPalmZ += adaptiveSmoothFactor * (palm.z - smoothedPalmZ);
 
-    // Emit swipe or regular gesture
+    // Emit swipe or regular gesture - SINGLE CALLBACK ONLY
     if (swipeDirection) {
+      if (hudEl) hudEl.innerHTML = `<span style="color:#ffd700">→ SWIPE ${swipeDirection}</span> | Exp: ${smoothedExpansion.toFixed(1)} | Compress: ${(compressionRatio*100).toFixed(0)}%`;
       try { callback("SWIPE", smoothedExpansion, smoothedOpenness, swipeDirection); } catch (e) { console.warn(e); }
     } else {
+      let gestureEmoji = lastConfirmedGesture === "FIST" ? "✊" : lastConfirmedGesture === "PINCH" ? "🤏" : "🖐️";
+      if (hudEl) hudEl.innerHTML = `Gesture: <b>${gestureEmoji} ${lastConfirmedGesture}</b> | Exp: ${smoothedExpansion.toFixed(1)} | Compress: ${(compressionRatio*100).toFixed(0)}%`;
       const handPos = { 
         x: smoothedPalmX, 
         y: smoothedPalmY, 
@@ -219,28 +230,23 @@ export function initHandTracking(callback) {
       };
       try { callback(lastConfirmedGesture, smoothedExpansion, smoothedOpenness, undefined, handPos); } catch (e) { console.warn(e); }
     }
-
-    // Compute palm velocity
-    if (prevPalm) {
-      palmVel.x = palm.x - prevPalm.x;
-      palmVel.y = palm.y - prevPalm.y;
-    }
-    prevPalm = { x: palm.x, y: palm.y };
-
-    const handPos = { x: palm.x, y: palm.y, z: palm.z, vx: palmVel.x, vy: palmVel.y };
-    try { callback(stableGesture, smoothedExpansion, smoothedOpenness, undefined, handPos); } catch (e) { console.warn(e); }
   });
 
   // Fallback: ensure getUserMedia starts the video stream before MediaPipe Camera
   const startStream = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 }, audio: false });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "user", width: 640, height: 480 }, 
+        audio: false 
+      });
       video.srcObject = stream;
-      await video.play();
-      if (hudEl) hudEl.textContent = "stream-started";
+      video.onloadedmetadata = () => {
+        video.play().catch(e => console.error("Video play error:", e));
+      };
+      if (hudEl) hudEl.innerHTML = `<span style="color:#51cf66">✓ Camera streaming...</span>`;
     } catch (err) {
-      console.error("getUserMedia error", err);
-      if (hudEl) hudEl.textContent = "camera-error";
+      console.error("getUserMedia error:", err);
+      if (hudEl) hudEl.innerHTML = `<span style="color:#ff6b6b">❌ Camera blocked. Allow in browser settings</span>`;
     }
   };
 
@@ -249,7 +255,7 @@ export function initHandTracking(callback) {
       try {
         await hands.send({ image: video });
       } catch (e) {
-        console.warn("hands.send error", e);
+        console.warn("hands.send error:", e);
       }
     },
     width: 640,
@@ -259,11 +265,11 @@ export function initHandTracking(callback) {
   (async () => {
     await startStream();
     try {
-      camera.start();
-      if (hudEl) hudEl.textContent = "camera-started";
+      await camera.start();
+      if (hudEl) hudEl.innerHTML = `<span style="color:#51cf66">✓ Ready. Show your hand...</span>`;
     } catch (e) {
-      console.error("Camera start failed", e);
-      if (hudEl) hudEl.textContent = "camera-error";
+      console.error("Camera.start failed:", e);
+      if (hudEl) hudEl.innerHTML = `<span style="color:#ff6b6b">❌ Camera failed. Reload page.</span>`;
     }
   })();
 }

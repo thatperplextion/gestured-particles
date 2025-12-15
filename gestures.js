@@ -3,12 +3,24 @@ export function initHandTracking(callback) {
   const hudEl = document.getElementById("hud");
   const overlay = document.getElementById("overlay");
   const ctx = overlay ? overlay.getContext("2d") : null;
-  // Smoothing
+  
+  // Enhanced smoothing with Kalman-like filtering
   let smoothedExpansion = 1;
   let smoothedOpenness = 0;
-    let prevPalm = null;
-    let palmVel = { x: 0, y: 0 };
-  const EMA = 0.2; // exponential moving average factor
+  let smoothedPalmX = 0.5;
+  let smoothedPalmY = 0.5;
+  let smoothedPalmZ = 0.5;
+  let prevPalm = null;
+  let palmVel = { x: 0, y: 0 };
+  
+  // Adaptive smoothing (stronger when hand is moving fast, lighter when stable)
+  const baseSmoothFactor = 0.15; // decreased from 0.2 for smoother transitions
+  const maxSmoothFactor = 0.25; // max smoothing during fast motion
+  
+  // Gesture validation buffer: track multiple metrics to confirm gesture
+  let gestureHistory = [];
+  const gestureBufferSize = 6; // increased from 4 for more reliable detection
+  let lastConfirmedGesture = "OPEN";
 
   const hands = new Hands({
     locateFile: file =>
@@ -17,8 +29,8 @@ export function initHandTracking(callback) {
 
   hands.setOptions({
     maxNumHands: 1,
-    minDetectionConfidence: 0.6,
-    minTrackingConfidence: 0.6,
+    minDetectionConfidence: 0.5,  // lower threshold for detection at any distance
+    minTrackingConfidence: 0.5,   // lower threshold for continuous tracking
     modelComplexity: 1,
     selfieMode: true
   });
@@ -98,39 +110,76 @@ export function initHandTracking(callback) {
     smoothedExpansion = smoothedExpansion + EMA * (expansion - smoothedExpansion);
 
     // Openness metric normalized 0..1 (higher means more open)
-    const openness = Math.max(0, Math.min(1, (avgOpenNorm - 0.15) / 0.35));
-    smoothedOpenness = smoothedOpenness + EMA * (openness - smoothedOpenness);
-
-    let gesture = "OPEN";
-    if (pinchDistNorm < 0.30) gesture = "PINCH"; // normalized threshold
-    else if (avgOpenNorm < 0.32) gesture = "FIST"; // slightly looser for fist
-    else if (avgOpenNorm > 0.52) gesture = "OPEN"; // explicitly mark open when wide
-
-    // Swipe detection using wrist horizontal velocity
-    // Keep a simple static cache on the function for previous wrist X
+    const openness = Math.max(0, Math.min(1, (avgOpenNorm - 0.12) / 0.40));
+    
+    // Adaptive smoothing: faster during motion, slower when stable
+    const palmMovement = prevPalm ? 
+      Math.sqrt((palm.x - prevPalm.x)**2 + (palm.y - prevPalm.y)**2) : 0;
+    const adaptiveSmoothFactor = baseSmoothFactor + Math.min(palmMovement * 2, maxSmoothFactor - baseSmoothFactor);
+    
+    smoothedExpansion += adaptiveSmoothFactor * (expansion - smoothedExpansion);
+    // Swipe detection using wrist horizontal velocity (momentum-based)
     if (!initHandTracking._prevWristX) initHandTracking._prevWristX = wrist.x;
-    const vx = wrist.x - initHandTracking._prevWristX; // positive = right to left in image space
+    if (!initHandTracking._swipeVelocity) initHandTracking._swipeVelocity = 0;
+    
+    const vx = wrist.x - initHandTracking._prevWristX;
+    initHandTracking._swipeVelocity = vx * 0.7 + initHandTracking._swipeVelocity * 0.3; // momentum smoothing
     initHandTracking._prevWristX = wrist.x;
 
-    // Threshold for swipe; MediaPipe coords ~0..1 range
-    const SWIPE_THRESHOLD = 0.06;
-    if (Math.abs(vx) > SWIPE_THRESHOLD) {
-      // With selfieMode, image x increases to the right relative to user
-      const direction = vx > 0 ? "RIGHT" : "LEFT";
-      try { callback("SWIPE", smoothedExpansion, smoothedOpenness, direction); } catch (e) { console.warn(e); }
-      return;
+    // Higher swipe threshold for more deliberate swipes
+    const SWIPE_THRESHOLD = 0.08;
+    let swipeDirection = null;
+    if (Math.abs(initHandTracking._swipeVelocity) > SWIPE_THRESHOLD && gesture === "OPEN") {
+      // In selfie mode: positive velocity = leftward swipe
+      swipeDirection = initHandTracking._swipeVelocity > 0 ? "LEFT" : "RIGHT";
+      initHandTracking._swipeVelocity = 0; // reset after detection
     }
 
-    // Provide live hand position (palm/wrist) normalized to screen
-    // Debounce: only emit when stable for STABLE_FRAMES
-    if (gesture === lastGesture) {
-      stableCount = Math.min(stableCount + 1, STABLE_FRAMES);
-    } else {
-      stableCount = 0;
+    // Gesture history buffer for confident multi-frame validation
+    gestureHistory.push({
+      gesture: gesture,
+      pinch: pinchDistNorm,
+      openness: avgOpenNorm
+    });
+    if (gestureHistory.length > gestureBufferSize) gestureHistory.shift();
+
+    // Confirm gesture only if majority of recent frames agree
+    const gestureVotes = {};
+    gestureHistory.forEach(h => {
+      gestureVotes[h.gesture] = (gestureVotes[h.gesture] || 0) + 1;
+    });
+    const votedGesture = Object.keys(gestureVotes).reduce((a, b) => 
+      gestureVotes[a] > gestureVotes[b] ? a : b
+    ) || "OPEN";
+    
+    if (votedGesture !== lastConfirmedGesture) {
+      lastConfirmedGesture = votedGesture;
     }
-    lastGesture = gesture;
-    if (stableCount >= STABLE_FRAMES) {
-      if (gesture !== stableGesture) stableGesture = gesture;
+
+    // Compute palm velocity with smoothing
+    if (prevPalm) {
+      palmVel.x = prevPalm.x ? (palm.x - prevPalm.x) * 0.6 + palmVel.x * 0.4 : 0; // velocity smoothing
+      palmVel.y = prevPalm.y ? (palm.y - prevPalm.y) * 0.6 + palmVel.y * 0.4 : 0;
+    }
+    prevPalm = { x: palm.x, y: palm.y };
+
+    // Smooth palm position with Kalman-like filtering
+    smoothedPalmX += adaptiveSmoothFactor * (palm.x - smoothedPalmX);
+    smoothedPalmY += adaptiveSmoothFactor * (palm.y - smoothedPalmY);
+    smoothedPalmZ += adaptiveSmoothFactor * (palm.z - smoothedPalmZ);
+
+    // Emit swipe or regular gesture
+    if (swipeDirection) {
+      try { callback("SWIPE", smoothedExpansion, smoothedOpenness, swipeDirection); } catch (e) { console.warn(e); }
+    } else {
+      const handPos = { 
+        x: smoothedPalmX, 
+        y: smoothedPalmY, 
+        z: smoothedPalmZ, 
+        vx: palmVel.x, 
+        vy: palmVel.y 
+      };
+      try { callback(lastConfirmedGesture, smoothedExpansion, smoothedOpenness, undefined, handPos); } catch (e) { console.warn(e); }
     }
 
     // Compute palm velocity

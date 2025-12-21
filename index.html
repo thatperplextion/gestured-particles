@@ -94,16 +94,41 @@
           // Compress all fingers = contract, open all fingers = expand
           setShape(shapeOrder[currentShapeIndex], expansion);
 
-          // Continuous blend based on five-finger compression state
-          // All fingers compressed → fireworks/swirl
-          // Fingers moderately compressed → pinch/spiral
-          // All fingers open → heart/pulse with expansion
-          const wHeart = Math.max(0, Math.min(1, openness * 1.2));
-          const wFlower = Math.max(0, Math.min(1, (openness - 0.3) * 1.5));
-          const wSaturn = gesture === 'FIST' ? 0.85 : Math.max(0, 0.15 - openness * 0.15);
-          const wFire = gesture === 'PINCH' || gesture === 'FIST' ? (gesture === 'FIST' ? 0.9 : 0.7) : Math.max(0, (0.25 - openness) * 0.35);
+          // ADVANCED BLEND WEIGHT MAPPING based on gesture and openness
+          // This creates smooth transitions between shapes based on hand compression
+          
+          // Normalize openness to 0-1 range (0 = fist, 1 = fully open)
+          const normalizedOpenness = Math.max(0, Math.min(1, openness));
+          
+          // Base blend weights for each gesture state
+          let wHeart = 0, wFlower = 0, wSaturn = 0, wFire = 0;
+          
+          if (gesture === 'FIST') {
+            // FIST STATE: Maximize fireworks, minimize open shapes
+            wFire = 0.9;
+            wSaturn = 0.4;
+            wHeart = 0.1 * normalizedOpenness;
+            wFlower = 0.05 * normalizedOpenness;
+          } else if (gesture === 'PINCH') {
+            // PINCH STATE: Mix saturn and fireworks, slight heart influence
+            // As fingers open more during pinch, transition to saturn
+            wSaturn = 0.5 + normalizedOpenness * 0.3;
+            wFire = 0.7 - normalizedOpenness * 0.2;
+            wHeart = 0.3 * normalizedOpenness;
+            wFlower = 0.2 * normalizedOpenness;
+          } else {
+            // OPEN STATE: Primarily heart and flower, influenced by openness degree
+            // Fully open = maximum heart, moderately open = flower blend
+            wHeart = 0.4 + normalizedOpenness * 0.6; // 0.4-1.0
+            wFlower = Math.max(0, (normalizedOpenness - 0.3) * 1.2); // ramps up after 30% open
+            wSaturn = Math.max(0, 0.2 - normalizedOpenness * 0.1); // decreases as hand opens
+            wFire = Math.max(0, 0.15 - normalizedOpenness * 0.15); // minimal in open state
+          }
+          
+          // Normalize weights to sum to 1.0
           let sum = wHeart + wFlower + wSaturn + wFire;
           if (sum < 1e-6) sum = 1;
+          
           setBlendWeights({
             heart: wHeart / sum,
             flower: wFlower / sum,

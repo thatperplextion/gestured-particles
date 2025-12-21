@@ -136,8 +136,13 @@ export function initHandTracking(callback) {
     // Apply five-finger compression modifier to final expansion
     const finalExpansion = expansion * fiveFingerExpansionModifier;
 
-    // Openness metric normalized 0..1 (higher means more open)
-    const openness = Math.max(0, Math.min(1, (avgOpenNorm - 0.12) / 0.40));
+    // Openness metric normalized 0..1 (0 = fully closed fist, 1 = fully open hand)
+    // Calibrated for reliable gesture-to-blend-weight mapping
+    const openness = Math.max(0, Math.min(1, (avgOpenNorm - 0.10) / 0.45));
+    
+    // Smooth openness with adaptive factor for responsive gesture blending
+    const opennessAdaptiveFactor = adaptiveSmoothFactor * 0.8; // slightly slower than expansion for stability
+    smoothedOpenness += opennessAdaptiveFactor * (openness - smoothedOpenness);
     
     // Adaptive smoothing: faster during motion, slower when stable
     const palmMovement = prevPalm ? 

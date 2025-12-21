@@ -85,10 +85,6 @@ export function setCenterOffset(normX, normY, normZ = 0) {
   centerOffset.x += (newX - centerOffset.x) * 0.2;
   centerOffset.y += (newY - centerOffset.y) * 0.2;
   centerOffset.z += (normZ * 2 - centerOffset.z) * 0.2;
-} handVel.y = newY - centerOffset.y;
-  centerOffset.x = newX;
-  centerOffset.y = newY;
-  centerOffset.z = normZ * 2;
 }
 
 export function setBlendWeights(weights) {

@@ -91,16 +91,29 @@
         let shapeOrder = ["heart", "flower", "saturn", "fireworks"];
         let currentShapeIndex = 0;
         const hudEl = document.getElementById('hud');
+        let lastHandPos = null;
 
         initHandTracking((gesture, expansion, openness, direction, handPos) => {
           if (hudEl) {
             hudEl.innerHTML = `Gesture: <b>${gesture}</b> | Exp: ${(expansion ?? 1).toFixed(1)} | Open: ${(openness ?? 0).toFixed(1)} | 5-Finger Control: 🖐️`;
           }
 
+          // Audio feedback for gestures
+          if (settings.settings.audioEnabled) {
+            audioFeedback.playGestureSound(gesture);
+            if (gesture === 'SWIPE') {
+              audioFeedback.playSwipeSound(direction);
+            }
+          }
+
           // Live hand follow with smooth centering
           if (handPos && typeof handPos.x === 'number') {
             // Smooth hand position tracking
             setCenterOffset(handPos.x, handPos.y, handPos.z);
+            lastHandPos = handPos;
+
+            // Update performance metrics
+            performance.setHandSpeed(expansion - 1);
           }
 
           // FIVE-FINGER EXPANSION/REDUCTION: Direct control with all fingers
@@ -203,15 +216,43 @@
           else { r = c; b = x; }
           const hex = ((Math.round((r + m) * 255) << 16) | (Math.round((g + m) * 255) << 8) | Math.round((b + m) * 255));
           setColor(hex);
+          trail.setColor(hex);
         });
 
         // Animation loop
         function animate() {
           requestAnimationFrame(animate);
+          
+          // Update performance metrics
+          performance.update();
+          
+          // Update particles with trails
           updateParticles();
+          
+          // Record particle positions for trails
+          if (settings.settings.trailEnabled) {
+            const pos = geometry.attributes.position.array;
+            trail.recordAllPositions(pos, 2000);
+            trail.updateTrailMesh();
+          }
+          
           renderer.render(scene, camera);
         }
         animate();
+
+        // Listen for settings changes
+        window.addEventListener('settingsChanged', (e) => {
+          const newSettings = e.detail;
+          if (newSettings.audioVolume) {
+            audioFeedback.setVolume(newSettings.audioVolume);
+          }
+          if (newSettings.trailLength !== undefined) {
+            trail.setTrailLength(newSettings.trailLength);
+          }
+          if (newSettings.trailEnabled !== undefined) {
+            trail.setEnabled(newSettings.trailEnabled);
+          }
+        });
 
         // Handle window resize
         window.addEventListener('resize', () => {

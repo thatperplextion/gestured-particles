@@ -225,11 +225,13 @@ export function initHandTracking(callback) {
 
     // Emit swipe or regular gesture - SINGLE CALLBACK ONLY
     if (swipeDirection) {
-      if (hudEl) hudEl.innerHTML = `<span style="color:#ffd700">→ SWIPE ${swipeDirection}</span> | Exp: ${smoothedExpansion.toFixed(1)} | Compress: ${(compressionRatio*100).toFixed(0)}%`;
+      const swipeSpeedDisplay = (palmSpeed * 100).toFixed(0);
+      if (hudEl) hudEl.innerHTML = `<span style="color:#ffd700">→ SWIPE ${swipeDirection}</span> | Speed: ${swipeSpeedDisplay}% | Exp: ${smoothedExpansion.toFixed(1)}`;
       try { callback("SWIPE", smoothedExpansion, smoothedOpenness, swipeDirection); } catch (e) { console.warn(e); }
     } else {
       let gestureEmoji = lastConfirmedGesture === "FIST" ? "✊" : lastConfirmedGesture === "PINCH" ? "🤏" : "🖐️";
-      if (hudEl) hudEl.innerHTML = `Gesture: <b>${gestureEmoji} ${lastConfirmedGesture}</b> | Exp: ${smoothedExpansion.toFixed(1)} | Compress: ${(compressionRatio*100).toFixed(0)}%`;
+      const speedDisplay = (palmSpeed * 100).toFixed(0);
+      if (hudEl) hudEl.innerHTML = `Gesture: <b>${gestureEmoji} ${lastConfirmedGesture}</b> | Speed: ${speedDisplay}% | Exp: ${smoothedExpansion.toFixed(1)} | Compress: ${(compressionRatio*100).toFixed(0)}%`;
       const handPos = { 
         x: smoothedPalmX, 
         y: smoothedPalmY, 

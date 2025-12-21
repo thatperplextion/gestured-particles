@@ -100,18 +100,42 @@ export function updateParticles() {
   currentExpansion += (targetExpansion - currentExpansion) * expansionDamp;
   time += 0.016; // match ~60fps frame time
 
-  // Adaptive follow gain based on hand velocity + distance independence
+  // ADVANCED ADAPTIVE FOLLOW GAIN based on hand velocity
   const speed = Math.sqrt(handVel.x * handVel.x + handVel.y * handVel.y);
-  const baseFollowGain = 0.12;      // base responsiveness
-  const maxFollowGain = 0.22;       // max responsiveness during fast motion
-  const followGain = Math.min(baseFollowGain + speed * 0.08, maxFollowGain);
   
-  // Distance-invariant damping: ensures smooth motion regardless of hand distance
+  // Multi-tier adaptive response for natural particle following:
+  // - Stationary: slower follow (particles settle naturally)
+  // - Slow motion: medium follow (smooth tracking)
+  // - Fast motion: rapid follow (particles snap to hand)
+  let followGain = 0.12; // base responsiveness (slow follow)
+  
+  if (speed > 0.05) {
+    // Fast hand motion: increase follow gain significantly
+    followGain = Math.min(0.12 + (speed - 0.05) * 0.3, 0.25);
+  } else if (speed > 0.02) {
+    // Medium hand motion: moderate follow gain
+    followGain = Math.min(0.12 + (speed - 0.02) * 0.2, 0.18);
+  }
+  // Below 0.02: use base followGain for smooth settling
+  
+  // Velocity-based damping: higher velocity = less damping (snappier response)
+  // Lower velocity = more damping (smoother settling)
   const centerOffsetDelta = Math.sqrt(
     (centerOffset.x - prevCenterOffset.x)**2 + 
     (centerOffset.y - prevCenterOffset.y)**2
   );
-  const damping = 0.92 - Math.min(centerOffsetDelta * 0.1, 0.15); // higher damping when hand moves fast
+  
+  // Adaptive damping coefficient (friction/air resistance)
+  // Range: 0.88 (fast motion, less friction) to 0.96 (slow motion, more friction)
+  let damping = 0.94;
+  if (speed > 0.08) {
+    damping = 0.88; // Low damping during fast motion - snappy response
+  } else if (speed > 0.03) {
+    damping = 0.90 + (0.08 - speed) * 0.5; // Interpolate based on speed
+  } else {
+    damping = 0.96; // High damping when stationary - smooth settling
+  }
+  
   prevCenterOffset = { ...centerOffset };
   prevExpansion = currentExpansion;
 

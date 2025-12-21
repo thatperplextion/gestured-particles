@@ -202,17 +202,26 @@ export function initHandTracking(callback) {
       lastConfirmedGesture = votedGesture;
     }
 
-    // Compute palm velocity with smoothing
+    // Compute palm velocity with advanced smoothing and acceleration tracking
     if (prevPalm) {
-      palmVel.x = prevPalm.x ? (palm.x - prevPalm.x) * 0.6 + palmVel.x * 0.4 : 0; // velocity smoothing
-      palmVel.y = prevPalm.y ? (palm.y - prevPalm.y) * 0.6 + palmVel.y * 0.4 : 0;
+      // Current frame velocity
+      const currentVx = palm.x - prevPalm.x;
+      const currentVy = palm.y - prevPalm.y;
+      
+      // Exponential moving average for smooth velocity (0.6 current, 0.4 previous)
+      palmVel.x = currentVx * 0.6 + palmVel.x * 0.4;
+      palmVel.y = currentVy * 0.6 + palmVel.y * 0.4;
     }
     prevPalm = { x: palm.x, y: palm.y };
 
     // Smooth palm position with Kalman-like filtering
-    smoothedPalmX += adaptiveSmoothFactor * (palm.x - smoothedPalmX);
-    smoothedPalmY += adaptiveSmoothFactor * (palm.y - smoothedPalmY);
-    smoothedPalmZ += adaptiveSmoothFactor * (palm.z - smoothedPalmZ);
+    // Velocity-based adaptive smoothing: faster motion = less smoothing
+    const palmSpeed = Math.sqrt(palmVel.x * palmVel.x + palmVel.y * palmVel.y);
+    const velocityAdaptiveFactor = palmSpeed > 0.05 ? 0.25 : Math.min(0.15 + palmSpeed * 2, 0.25);
+    
+    smoothedPalmX += velocityAdaptiveFactor * (palm.x - smoothedPalmX);
+    smoothedPalmY += velocityAdaptiveFactor * (palm.y - smoothedPalmY);
+    smoothedPalmZ += velocityAdaptiveFactor * (palm.z - smoothedPalmZ);
 
     // Emit swipe or regular gesture - SINGLE CALLBACK ONLY
     if (swipeDirection) {

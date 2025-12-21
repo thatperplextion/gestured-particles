@@ -59,6 +59,11 @@
         // Lazy-load modules
         const { initParticles, updateParticles, setShape, setColor, setMotion, setCenterOffset, setBlendWeights } = await import('./particles.js');
         const { initHandTracking } = await import('./gestures.js');
+        const { AudioFeedback } = await import('./audio.js');
+        const { SettingsPanel } = await import('./settings.js');
+        const { PerformanceDashboard } = await import('./performance.js');
+        const { ParticleTrail } = await import('./trail.js');
+        const { ScreenRecorder } = await import('./recorder.js');
 
         let scene, camera, renderer;
 
@@ -71,8 +76,16 @@
         renderer.setClearColor(0x000000, 1);
         document.body.appendChild(renderer.domElement);
 
+        // Initialize enhanced features
+        const audioFeedback = new AudioFeedback();
+        const settings = new SettingsPanel();
+        const performance = new PerformanceDashboard();
+        const trail = new ParticleTrail(2000);
+        const recorder = new ScreenRecorder(renderer.domElement);
+
         // Initialize particles
         initParticles(scene);
+        trail.initTrailSystem(scene);
 
         // Initialize hand tracking
         let shapeOrder = ["heart", "flower", "saturn", "fireworks"];

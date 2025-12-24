@@ -407,44 +407,35 @@
           const expansion = 0.3 + compression * 2.2;
           targetExpansion = expansion;
 
-          // Gesture detection for display
+          // Gesture detection and galaxy control
           let gesture = "OPEN PALM";
-          let galaxyState = "Expanded Galaxy";
+          let statusColor = '#00ffff';
+          let galaxyState = 'Stable';
           
           if (compression < 0.2) {
             gesture = "FIST";
             currentGesture = "FIST";
-            galaxyState = "Contracted Galaxy";
             galaxySpeed = 0.008; // Faster rotation when closed
+            statusColor = '#ff4444';
+            galaxyState = 'Contracting';
           } else if (compression < 0.6) {
             gesture = "PINCH";
             currentGesture = "PINCH";
-            galaxyState = "Spiraling Galaxy";
             galaxySpeed = 0.005; // Medium rotation
+            statusColor = '#ffaa00';
+            galaxyState = 'Condensing';
           } else {
             gesture = "OPEN_PALM";
             currentGesture = "OPEN_PALM";
-            galaxyState = "Stable Galaxy";
             galaxySpeed = 0.002; // Slow, majestic rotation
+            statusColor = '#00ffff';
+            galaxyState = 'Stable';
           }
-
-          targetExpansion = expansion;
 
           // Update HUD with galaxy status
           const galaxySize = currentExpansion.toFixed(2);
           const spiralTightnessValue = (spiralTightness * 10).toFixed(1);
           const rotationSpeed = (galaxySpeed * 1000).toFixed(3);
-          
-          let statusColor = '#00ffff';
-          let galaxyState = 'Stable';
-          
-          if (gesture === "FIST") {
-            statusColor = '#ff4444';
-            galaxyState = 'Contracting';
-          } else if (gesture === "PINCH") {
-            statusColor = '#ffaa00';
-            galaxyState = 'Condensing';
-          }
 
           hudEl.innerHTML = `
             <div style="color: ${statusColor};">🌌 Galaxy Control Active</div>

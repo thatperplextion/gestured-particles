@@ -305,16 +305,16 @@
           const minDistance = Math.min(...allDistances);
           
           // Compression ratio: how closed is the fist (0-1, where 0 = fist, 1 = open)
-          const closedThreshold = 0.08;  // fully closed fist
-          const openThreshold = 0.18;    // fully open hand
+          const closedThreshold = 0.05;  // fully closed fist (more sensitive)
+          const openThreshold = 0.12;    // fully open hand (lower threshold)
           let compression = Math.max(0, Math.min(1, (avgDistance - closedThreshold) / (openThreshold - closedThreshold)));
           const expansion = 0.5 + compression * 2.5;
 
           // Gesture detection with better thresholds
           let gesture = "OPEN";
-          if (compression < 0.25) {
-            gesture = "FIST";  // Very closed
-          } else if (compression < 0.50) {
+          if (compression < 0.15) {
+            gesture = "FIST";  // Much more sensitive
+          } else if (compression < 0.40) {
             gesture = "PINCH"; // Moderately closed
           } else {
             gesture = "OPEN";  // Open hand

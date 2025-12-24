@@ -58,6 +58,8 @@
     let handInfluence = { x: 0, y: 0, z: 0 };
     let currentGesture = "OPEN_PALM";
     let currentCompression = 0;
+    let smoothedCompression = 0;
+    let prevCompressions = [];
     
     // Galaxy shape data - spiral arms
     let galaxyPositions = [];
@@ -395,30 +397,48 @@
           
           const avgDistance = allDistances.reduce((a, b) => a + b) / 5;
           
-          // Galaxy expansion control: Open palm = expanded, Closed fist = contracted
-          const closedThreshold = 0.04;  // Tight fist
-          const openThreshold = 0.15;    // Open palm
-          let compression = Math.max(0, Math.min(1, (avgDistance - closedThreshold) / (openThreshold - closedThreshold)));
+          // Improved thresholds - more sensitive for normal camera distance
+          const closedThreshold = 0.06;  // Lower = more sensitive to fist
+          const openThreshold = 0.20;    // Higher = more forgiving for open palm
+          let rawCompression = Math.max(0, Math.min(1, (avgDistance - closedThreshold) / (openThreshold - closedThreshold)));
+          
+          // Additional check: finger curl detection for better fist recognition
+          const indexKnuckle = lm[5];
+          const middleKnuckle = lm[9];
+          const fingerCurl = (
+            Math.sqrt(Math.pow(index.x - indexKnuckle.x, 2) + Math.pow(index.y - indexKnuckle.y, 2)) +
+            Math.sqrt(Math.pow(middle.x - middleKnuckle.x, 2) + Math.pow(middle.y - middleKnuckle.y, 2))
+          ) / 2;
+          
+          // If fingers are curled (small distance), boost fist detection
+          if (fingerCurl < 0.05) {
+            rawCompression *= 0.5; // Make it easier to detect as fist
+          }
+          
+          // Smooth the compression with moving average
+          prevCompressions.push(rawCompression);
+          if (prevCompressions.length > 5) prevCompressions.shift();
+          smoothedCompression = prevCompressions.reduce((a, b) => a + b) / prevCompressions.length;
           
           // Store compression globally for color updates
-          currentCompression = compression;
+          currentCompression = smoothedCompression;
           
           // Expansion mapping: 0.3 (tight galaxy) to 2.5 (expanded galaxy)
-          const expansion = 0.3 + compression * 2.2;
+          const expansion = 0.3 + smoothedCompression * 2.2;
           targetExpansion = expansion;
 
-          // Gesture detection and galaxy control
+          // Gesture detection with adjusted thresholds for smoother transitions
           let gesture = "OPEN PALM";
           let statusColor = '#00ffff';
           let galaxyState = 'Stable';
           
-          if (compression < 0.2) {
+          if (smoothedCompression < 0.3) {
             gesture = "FIST";
             currentGesture = "FIST";
             galaxySpeed = 0.008; // Faster rotation when closed
             statusColor = '#ff4444';
             galaxyState = 'Contracting';
-          } else if (compression < 0.6) {
+          } else if (smoothedCompression < 0.65) {
             gesture = "PINCH";
             currentGesture = "PINCH";
             galaxySpeed = 0.005; // Medium rotation
@@ -436,10 +456,11 @@
           const galaxySize = currentExpansion.toFixed(2);
           const spiralTightnessValue = (spiralTightness * 10).toFixed(1);
           const rotationSpeed = (galaxySpeed * 1000).toFixed(3);
+          const compressionPercent = ((1 - smoothedCompression) * 100).toFixed(0);
 
           hudEl.innerHTML = `
             <div style="color: ${statusColor};">🌌 Galaxy Control Active</div>
-            <div>State: <b style="color:${statusColor};">${galaxyState}</b></div>
+            <div>State: <b style="color:${statusColor};">${galaxyState}</b> | Fist: ${compressionPercent}%</div>
             <div>Size: ${galaxySize}x | Speed: ${rotationSpeed}</div>
             <div>Spiral Arms: ${spiralTightnessValue} | Particles: 3000</div>
             <div>Center: (${centerOffset.x.toFixed(1)}, ${centerOffset.y.toFixed(1)})</div>

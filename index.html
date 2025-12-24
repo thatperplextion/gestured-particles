@@ -283,25 +283,42 @@
           centerOffset.y = (0.5 - palm.y) * 6;
           centerOffset.z = 0;
 
-          // Compression calculation
-          const indexTip = lm[8];
-          const thumbTip = lm[4];
-          const palmLeft = lm[5];
-          const palmRight = lm[17];
-          const palmWidth = Math.max(
-            Math.sqrt(Math.pow(palmRight.x - palmLeft.x, 2) + Math.pow(palmRight.y - palmLeft.y, 2)),
-            0.001
-          );
-
-          const indexDist = Math.sqrt(Math.pow(indexTip.x - palm.x, 2) + Math.pow(indexTip.y - palm.y, 2)) / palmWidth;
-          const thumbDist = Math.sqrt(Math.pow(thumbTip.x - palm.x, 2) + Math.pow(thumbTip.y - palm.y, 2)) / palmWidth;
-          const compression = (indexDist + thumbDist) / 2;
+          // Compression calculation - check all 5 fingertips
+          const thumb = lm[4];
+          const index = lm[8];
+          const middle = lm[12];
+          const ring = lm[16];
+          const pinky = lm[20];
+          const palmBase = lm[0];
+          
+          // Calculate average distance of all fingertips from palm
+          const allDistances = [
+            Math.sqrt(Math.pow(thumb.x - palmBase.x, 2) + Math.pow(thumb.y - palmBase.y, 2) + Math.pow(thumb.z - palmBase.z, 2)),
+            Math.sqrt(Math.pow(index.x - palmBase.x, 2) + Math.pow(index.y - palmBase.y, 2) + Math.pow(index.z - palmBase.z, 2)),
+            Math.sqrt(Math.pow(middle.x - palmBase.x, 2) + Math.pow(middle.y - palmBase.y, 2) + Math.pow(middle.z - palmBase.z, 2)),
+            Math.sqrt(Math.pow(ring.x - palmBase.x, 2) + Math.pow(ring.y - palmBase.y, 2) + Math.pow(ring.z - palmBase.z, 2)),
+            Math.sqrt(Math.pow(pinky.x - palmBase.x, 2) + Math.pow(pinky.y - palmBase.y, 2) + Math.pow(pinky.z - palmBase.z, 2))
+          ];
+          
+          const avgDistance = allDistances.reduce((a, b) => a + b) / 5;
+          const maxDistance = Math.max(...allDistances);
+          const minDistance = Math.min(...allDistances);
+          
+          // Compression ratio: how closed is the fist (0-1, where 0 = fist, 1 = open)
+          const closedThreshold = 0.08;  // fully closed fist
+          const openThreshold = 0.18;    // fully open hand
+          let compression = Math.max(0, Math.min(1, (avgDistance - closedThreshold) / (openThreshold - closedThreshold)));
           const expansion = 0.5 + compression * 2.5;
 
-          // Gesture detection
+          // Gesture detection with better thresholds
           let gesture = "OPEN";
-          if (compression < 0.30) gesture = "FIST";
-          else if (compression < 0.45) gesture = "PINCH";
+          if (compression < 0.25) {
+            gesture = "FIST";  // Very closed
+          } else if (compression < 0.50) {
+            gesture = "PINCH"; // Moderately closed
+          } else {
+            gesture = "OPEN";  // Open hand
+          }
 
           // Shape blending based on gesture
           if (gesture === "FIST") {

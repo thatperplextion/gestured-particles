@@ -44,13 +44,17 @@
     // Wait for Three.js and MediaPipe to load
     let retries = 0;
     const waitForDeps = setInterval(() => {
-      if (typeof THREE !== 'undefined' && typeof Hands !== 'undefined' && typeof Camera !== 'undefined') {
+      const hasThree = typeof window.THREE !== 'undefined';
+      const hasHands = typeof window.Hands !== 'undefined';
+      const hasCamera = typeof window.Camera !== 'undefined';
+      
+      if (hasThree && hasHands && hasCamera) {
         clearInterval(waitForDeps);
         initApp();
       } else if (retries++ > 100) {
-        console.error("Failed to load dependencies");
+        console.error("Failed to load dependencies. THREE:", hasThree, "Hands:", hasHands, "Camera:", hasCamera);
         clearInterval(waitForDeps);
-        document.getElementById('hud').textContent = "Error: Failed to load libraries";
+        document.getElementById('hud').innerHTML = `<span style="color:#ff6b6b;">❌ Error: Libraries failed to load</span>`;
       }
     }, 50);
 

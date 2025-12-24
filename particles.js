@@ -21,6 +21,8 @@ let prevCenterOffset = { x: 0, y: 0, z: 0 };
 let prevExpansion = 1;
 
 export function initParticles(scene) {
+  const THREE = window.THREE;
+  
   geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(COUNT * 3);
 

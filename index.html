@@ -41,26 +41,55 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
   <script>
-    // ====== GLOBAL STATE ======
+    // ====== GLOBAL STATE - GALAXY SYSTEM ======
     const THREE = window.THREE;
     let scene, camera, renderer, geometry, material, points;
     let positions, velocities;
-    const PARTICLE_COUNT = 2000;
+    const PARTICLE_COUNT = 3000; // More particles for galaxy effect
     let centerOffset = { x: 0, y: 0, z: 0 };
     let time = 0;
-    let motionMode = "pulse";
+    let motionMode = "galaxy";
     let currentExpansion = 1;
     let targetExpansion = 1;
-    let particleColor = 0xff66cc;
-    let blend = { heart: 1, saturn: 0, flower: 0, fireworks: 0 };
+    let particleColor = 0x4488ff;
+    let galaxyRotation = 0;
+    let galaxySpeed = 0.002;
+    let spiralTightness = 1.0;
+    let handInfluence = { x: 0, y: 0, z: 0 };
     
-    // Shape data
-    let shapePositions = {
-      heart: [],
-      flower: [],
-      saturn: [],
-      fireworks: []
-    };
+    // Galaxy shape data - spiral arms
+    let galaxyPositions = [];
+
+    // ====== GALAXY GENERATION ======
+    function generateGalaxy() {
+      galaxyPositions = Array.from({ length: PARTICLE_COUNT }, (_, i) => {
+        // Create spiral galaxy with multiple arms
+        const armIndex = i % 4; // 4 spiral arms
+        const armOffset = (armIndex * Math.PI * 2) / 4;
+        
+        // Distance from center (0 to 4 units)
+        const radius = Math.pow(Math.random(), 0.8) * 4;
+        
+        // Spiral angle based on distance
+        const spiralAngle = radius * 0.8 + armOffset;
+        
+        // Add some randomness to make it look natural
+        const randomAngle = (Math.random() - 0.5) * 0.5;
+        const randomRadius = (Math.random() - 0.5) * 0.3;
+        
+        const finalAngle = spiralAngle + randomAngle;
+        const finalRadius = radius + randomRadius;
+        
+        // Convert to cartesian coordinates
+        const x = Math.cos(finalAngle) * finalRadius;
+        const z = Math.sin(finalAngle) * finalRadius;
+        
+        // Add some vertical variation (galaxy thickness)
+        const y = (Math.random() - 0.5) * Math.exp(-radius * 0.5) * 0.8;
+        
+        return { x, y, z, originalRadius: finalRadius, originalAngle: finalAngle };
+      });
+    }
 
     // ====== SHAPE GENERATION ======
     function generateShapes() {
@@ -108,30 +137,41 @@
     function initThreeJS() {
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      camera.position.z = 8;
+      camera.position.z = 12; // Moved back to see the galaxy better
       
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setClearColor(0x000000, 1);
+      renderer.setClearColor(0x000008, 1); // Deep space blue-black
       document.body.appendChild(renderer.domElement);
 
-      // Particles
+      // Galaxy particles
       geometry = new THREE.BufferGeometry();
       positions = new Float32Array(PARTICLE_COUNT * 3);
       velocities = new Float32Array(PARTICLE_COUNT * 3);
+      
+      // Add colors for each particle
+      const colors = new Float32Array(PARTICLE_COUNT * 3);
+      
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
       material = new THREE.PointsMaterial({
-        size: 0.05,
-        color: particleColor,
-        sizeAttenuation: true
+        size: 0.08,
+        sizeAttenuation: true,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending // Makes particles glow
       });
 
       points = new THREE.Points(geometry, material);
       scene.add(points);
 
-      // Generate shapes
-      generateShapes();
+      // Generate galaxy
+      generateGalaxy();
+      
+      // Initialize particle colors based on distance from center
+      updateGalaxyColors();
 
       // Start animation
       animate();
@@ -143,7 +183,7 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
       });
 
-      document.getElementById('hud').textContent = "✓ Three.js initialized. Waiting for hand detection...";
+      document.getElementById('hud').textContent = "✓ Galaxy initialized. Control with hand gestures...";
     }
 
     // ====== ANIMATION LOOP ======

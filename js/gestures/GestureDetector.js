@@ -10,11 +10,11 @@ class GestureDetector {
     this.swipeStartPosition = null;
     this.swipeStartTime = null;
     
-    // Thresholds
-    this.pinchThreshold = 0.05; // Normalized distance
-    this.clapThreshold = 0.15;
-    this.clapVelocityThreshold = 2.0;
-    this.swipeDistanceThreshold = 0.2;
+    // Thresholds (increased sensitivity)
+    this.pinchThreshold = 0.08; // Normalized distance (was 0.05)
+    this.clapThreshold = 0.20; // Easier clap detection (was 0.15)
+    this.clapVelocityThreshold = 1.5; // Lower velocity needed (was 2.0)
+    this.swipeDistanceThreshold = 0.15; // Shorter swipe distance (was 0.2)
     this.swipeTimeWindow = 500; // ms
     
     this.currentGestures = {

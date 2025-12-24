@@ -56,6 +56,8 @@
     let galaxySpeed = 0.002;
     let spiralTightness = 1.0;
     let handInfluence = { x: 0, y: 0, z: 0 };
+    let currentGesture = "OPEN_PALM";
+    let currentCompression = 0;
     
     // Galaxy shape data - spiral arms
     let galaxyPositions = [];
@@ -186,56 +188,60 @@
       document.getElementById('hud').textContent = "✓ Galaxy initialized. Control with hand gestures...";
     }
 
-    // ====== ANIMATION LOOP ======
+    // ====== GALAXY ANIMATION ======
     function animate() {
       requestAnimationFrame(animate);
 
       time += 0.016;
-      currentExpansion += (targetExpansion - currentExpansion) * 0.05;
+      currentExpansion += (targetExpansion - currentExpansion) * 0.02; // Smoother transitions
 
       const pos = geometry.attributes.position.array;
+      const colors = geometry.attributes.color.array;
+      
+      // Smooth hand influence
+      handInfluence.x += (centerOffset.x - handInfluence.x) * 0.05;
+      handInfluence.y += (centerOffset.y - handInfluence.y) * 0.05;
+      handInfluence.z += (centerOffset.z - handInfluence.z) * 0.05;
+      
+      // Galaxy rotation based on expansion (closed fist = faster rotation)
+      const rotationSpeed = galaxySpeed * (2.0 - currentExpansion);
+      galaxyRotation += rotationSpeed;
       
       // Update each particle
       for (let i = 0; i < PARTICLE_COUNT; i++) {
-        // Blend shapes
-        let tx = 0, ty = 0, tz = 0;
+        const galaxyParticle = galaxyPositions[i];
         
-        if (shapePositions.heart[i]) {
-          tx += shapePositions.heart[i].x * blend.heart;
-          ty += shapePositions.heart[i].y * blend.heart;
-          tz += shapePositions.heart[i].z * blend.heart;
-        }
-        if (shapePositions.flower[i]) {
-          tx += shapePositions.flower[i].x * blend.flower;
-          ty += shapePositions.flower[i].y * blend.flower;
-          tz += shapePositions.flower[i].z * blend.flower;
-        }
-        if (shapePositions.saturn[i]) {
-          tx += shapePositions.saturn[i].x * blend.saturn;
-          ty += shapePositions.saturn[i].y * blend.saturn;
-          tz += shapePositions.saturn[i].z * blend.saturn;
-        }
-        if (shapePositions.fireworks[i]) {
-          tx += shapePositions.fireworks[i].x * blend.fireworks;
-          ty += shapePositions.fireworks[i].y * blend.fireworks;
-          tz += shapePositions.fireworks[i].z * blend.fireworks;
-        }
-
-        const targetX = tx * currentExpansion + centerOffset.x;
-        const targetY = ty * currentExpansion + centerOffset.y;
-        const targetZ = tz * currentExpansion + centerOffset.z;
-
-        // Physics
+        // Calculate spiral position with rotation
+        const rotatedAngle = galaxyParticle.originalAngle + galaxyRotation * (1 + galaxyParticle.originalRadius * 0.1);
+        
+        // Base spiral position
+        let targetX = Math.cos(rotatedAngle) * galaxyParticle.originalRadius * currentExpansion;
+        let targetY = galaxyParticle.y * currentExpansion;
+        let targetZ = Math.sin(rotatedAngle) * galaxyParticle.originalRadius * currentExpansion;
+        
+        // Add hand influence (galaxy follows hand movement)
+        const handStrength = 0.3;
+        targetX += handInfluence.x * handStrength;
+        targetY += handInfluence.y * handStrength;
+        targetZ += handInfluence.z * handStrength;
+        
+        // Add some orbital motion variation
+        const orbitalInfluence = Math.sin(time * 0.5 + galaxyParticle.originalRadius) * 0.1;
+        targetX += orbitalInfluence * Math.cos(rotatedAngle + Math.PI/2);
+        targetZ += orbitalInfluence * Math.sin(rotatedAngle + Math.PI/2);
+        
+        // Physics - smooth movement towards target
+        const followGain = 0.08; // Slower, more graceful movement
         const dx = targetX - pos[i*3];
         const dy = targetY - pos[i*3+1];
         const dz = targetZ - pos[i*3+2];
 
-        let followGain = 0.15;
         velocities[i*3] += dx * followGain;
         velocities[i*3+1] += dy * followGain;
         velocities[i*3+2] += dz * followGain;
 
-        const damping = 0.92;
+        // Damping for smooth motion
+        const damping = 0.95;
         velocities[i*3] *= damping;
         velocities[i*3+1] *= damping;
         velocities[i*3+2] *= damping;
@@ -243,34 +249,81 @@
         pos[i*3] += velocities[i*3];
         pos[i*3+1] += velocities[i*3+1];
         pos[i*3+2] += velocities[i*3+2];
-
-        // Motion modes
-        if (motionMode === "orbit") {
-          const rotSpeed = 0.004;
-          const dx2 = pos[i*3] - centerOffset.x;
-          const dz2 = pos[i*3+2] - centerOffset.z;
-          const cos_a = Math.cos(rotSpeed);
-          const sin_a = Math.sin(rotSpeed);
-          pos[i*3] = centerOffset.x + (dx2 * cos_a - dz2 * sin_a);
-          pos[i*3+2] = centerOffset.z + (dx2 * sin_a + dz2 * cos_a);
-        } else if (motionMode === "pulse") {
-          const pulseMag = 1 + Math.sin(time * 1.2) * 0.035;
-          const dist = Math.sqrt(
-            Math.pow(pos[i*3] - centerOffset.x, 2) + 
-            Math.pow(pos[i*3+1] - centerOffset.y, 2) + 
-            Math.pow(pos[i*3+2] - centerOffset.z, 2)
-          );
-          if (dist > 0.01) {
-            const scale = pulseMag / (dist + 0.1);
-            pos[i*3] = centerOffset.x + (pos[i*3] - centerOffset.x) * scale;
-            pos[i*3+1] = centerOffset.y + (pos[i*3+1] - centerOffset.y) * scale;
-            pos[i*3+2] = centerOffset.z + (pos[i*3+2] - centerOffset.z) * scale;
-          }
+        
+        // Dynamic colors based on gesture and distance
+        const distanceFromCenter = Math.sqrt(pos[i*3]*pos[i*3] + pos[i*3+1]*pos[i*3+1] + pos[i*3+2]*pos[i*3+2]);
+        const normalizedDistance = Math.min(1, distanceFromCenter / 6);
+        
+        // Color schemes that change with gesture
+        let centerColor, edgeColor, brightness;
+        
+        if (currentGesture === "FIST") {
+          // Intense red-orange for contracted state
+          centerColor = { r: 1.0, g: 0.2, b: 0.1 };
+          edgeColor = { r: 1.0, g: 0.4, b: 0.0 };
+          brightness = 1.2 + (2.0 - currentExpansion) * 0.3; // Brighter core when contracted
+        } else if (currentGesture === "PINCH") {
+          // Purple-magenta for intermediate state
+          centerColor = { r: 0.8, g: 0.1, b: 1.0 };
+          edgeColor = { r: 1.0, g: 0.3, b: 0.8 };
+          brightness = 0.9;
+        } else {
+          // Cool blue-cyan for expanded state
+          centerColor = { r: 0.3, g: 0.5, b: 1.0 };
+          edgeColor = { r: 0.0, g: 0.8, b: 1.0 };
+          brightness = 0.7;
         }
+        
+        // Interpolate colors
+        colors[i*3] = (centerColor.r + (edgeColor.r - centerColor.r) * normalizedDistance) * brightness;
+        colors[i*3+1] = (centerColor.g + (edgeColor.g - centerColor.g) * normalizedDistance) * brightness;
+        colors[i*3+2] = (centerColor.b + (edgeColor.b - centerColor.b) * normalizedDistance) * brightness;
       }
 
       geometry.attributes.position.needsUpdate = true;
+      geometry.attributes.color.needsUpdate = true;
       renderer.render(scene, camera);
+    }
+    
+    function updateGalaxyColors(gesture = "OPEN_PALM", compression = 0) {
+      const colors = geometry.attributes.color.array;
+      
+      // Dynamic color scheme based on gesture
+      let centerColor, edgeColor, intensity;
+      
+      if (gesture === "FIST") {
+        // Intense red-orange for contracted state
+        centerColor = { r: 1.0, g: 0.2, b: 0.1 };
+        edgeColor = { r: 1.0, g: 0.4, b: 0.0 };
+        intensity = 1.2;
+      } else if (gesture === "PINCH") {
+        // Purple-magenta for intermediate state
+        centerColor = { r: 0.8, g: 0.1, b: 1.0 };
+        edgeColor = { r: 1.0, g: 0.3, b: 0.8 };
+        intensity = 1.0;
+      } else {
+        // Cool blue-cyan for expanded state
+        centerColor = { r: 0.1, g: 0.3, b: 1.0 };
+        edgeColor = { r: 0.0, g: 0.8, b: 1.0 };
+        intensity = 0.8;
+      }
+      
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const distance = Math.min(galaxyPositions[i].originalRadius / 4, 1.0); // Normalize 0-1
+        
+        // Interpolate colors based on distance
+        const r = centerColor.r + (edgeColor.r - centerColor.r) * distance;
+        const g = centerColor.g + (edgeColor.g - centerColor.g) * distance;
+        const b = centerColor.b + (edgeColor.b - centerColor.b) * distance;
+        
+        // Apply intensity and slight shimmer
+        const shimmer = 0.9 + 0.1 * Math.sin(Date.now() * 0.003 + distance * 10);
+        colors[i*3] = r * intensity * shimmer;
+        colors[i*3+1] = g * intensity * shimmer;
+        colors[i*3+2] = b * intensity * shimmer;
+      }
+      
+      geometry.attributes.color.needsUpdate = true;
     }
 
     // ====== HAND TRACKING ======
@@ -317,10 +370,10 @@
             ctx.fill();
           }
 
-          // ===== REAL-TIME HAND FOLLOWING =====
+          // ===== GALAXY HAND CONTROL =====
           const palm = lm[0];
-          centerOffset.x = (palm.x - 0.5) * 6;
-          centerOffset.y = (0.5 - palm.y) * 6;
+          centerOffset.x = (palm.x - 0.5) * 8;  // Increased range for galaxy movement
+          centerOffset.y = (0.5 - palm.y) * 8;
           centerOffset.z = 0;
 
           // Compression calculation - check all 5 fingertips
@@ -341,56 +394,69 @@
           ];
           
           const avgDistance = allDistances.reduce((a, b) => a + b) / 5;
-          const maxDistance = Math.max(...allDistances);
-          const minDistance = Math.min(...allDistances);
           
-          // Compression ratio: how closed is the fist (0-1, where 0 = fist, 1 = open)
-          const closedThreshold = 0.05;  // fully closed fist (more sensitive)
-          const openThreshold = 0.12;    // fully open hand (lower threshold)
+          // Galaxy expansion control: Open palm = expanded, Closed fist = contracted
+          const closedThreshold = 0.04;  // Tight fist
+          const openThreshold = 0.15;    // Open palm
           let compression = Math.max(0, Math.min(1, (avgDistance - closedThreshold) / (openThreshold - closedThreshold)));
-          const expansion = 0.5 + compression * 2.5;
+          
+          // Store compression globally for color updates
+          currentCompression = compression;
+          
+          // Expansion mapping: 0.3 (tight galaxy) to 2.5 (expanded galaxy)
+          const expansion = 0.3 + compression * 2.2;
+          targetExpansion = expansion;
 
-          // Gesture detection with better thresholds
-          let gesture = "OPEN";
-          if (compression < 0.15) {
-            gesture = "FIST";  // Much more sensitive
-          } else if (compression < 0.40) {
-            gesture = "PINCH"; // Moderately closed
+          // Gesture detection for display
+          let gesture = "OPEN PALM";
+          let galaxyState = "Expanded Galaxy";
+          
+          if (compression < 0.2) {
+            gesture = "FIST";
+            currentGesture = "FIST";
+            galaxyState = "Contracted Galaxy";
+            galaxySpeed = 0.008; // Faster rotation when closed
+          } else if (compression < 0.6) {
+            gesture = "PINCH";
+            currentGesture = "PINCH";
+            galaxyState = "Spiraling Galaxy";
+            galaxySpeed = 0.005; // Medium rotation
           } else {
-            gesture = "OPEN";  // Open hand
-          }
-
-          // Shape blending based on gesture
-          if (gesture === "FIST") {
-            blend = { heart: 0.1, flower: 0.05, saturn: 0.4, fireworks: 0.9 };
-            motionMode = "orbit";
-          } else if (gesture === "PINCH") {
-            blend = { heart: 0.3, flower: 0.2, saturn: 0.6, fireworks: 0.5 };
-            motionMode = "swirl";
-          } else {
-            blend = { heart: 0.8, flower: 0.6, saturn: 0.1, fireworks: 0.1 };
-            motionMode = "pulse";
+            gesture = "OPEN_PALM";
+            currentGesture = "OPEN_PALM";
+            galaxyState = "Stable Galaxy";
+            galaxySpeed = 0.002; // Slow, majestic rotation
           }
 
           targetExpansion = expansion;
 
-          // Update color based on gesture
+          // Update HUD with galaxy status
+          const galaxySize = currentExpansion.toFixed(2);
+          const spiralTightnessValue = (spiralTightness * 10).toFixed(1);
+          const rotationSpeed = (galaxySpeed * 1000).toFixed(3);
+          
+          let statusColor = '#00ffff';
+          let galaxyState = 'Stable';
+          
           if (gesture === "FIST") {
-            particleColor = 0xff0066;
+            statusColor = '#ff4444';
+            galaxyState = 'Contracting';
           } else if (gesture === "PINCH") {
-            particleColor = 0x6600ff;
-          } else {
-            particleColor = 0x00ffff;
+            statusColor = '#ffaa00';
+            galaxyState = 'Condensing';
           }
-          material.color.setHex(particleColor);
 
-          // Update HUD
           hudEl.innerHTML = `
-            <div style="color: #0ff;">✓ Hand Detected</div>
-            <div>Gesture: <b>${gesture}</b></div>
-            <div>Expansion: ${expansion.toFixed(2)}</div>
-            <div>Compression: ${(compression * 100).toFixed(0)}%</div>
-            <div>Position: (${centerOffset.x.toFixed(1)}, ${centerOffset.y.toFixed(1)})</div>
+            <div style="color: ${statusColor};">🌌 Galaxy Control Active</div>
+            <div>State: <b style="color:${statusColor};">${galaxyState}</b></div>
+            <div>Size: ${galaxySize}x | Speed: ${rotationSpeed}</div>
+            <div>Spiral Arms: ${spiralTightnessValue} | Particles: 3000</div>
+            <div>Center: (${centerOffset.x.toFixed(1)}, ${centerOffset.y.toFixed(1)})</div>
+            <div style="font-size:11px; opacity:0.7; margin-top:5px;">
+              ${gesture === "OPEN_PALM" ? "Open palm = Stable expanded galaxy" : 
+                gesture === "FIST" ? "Closed fist = Contracted spinning galaxy" : 
+                "Move hand to control galaxy position"}
+            </div>
           `;
         } else {
           hudEl.innerHTML = `<div style="color: #f00;">❌ No hand detected - Please show your hand to camera</div>`;

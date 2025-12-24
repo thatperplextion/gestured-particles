@@ -8,8 +8,8 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { width: 100vw; height: 100vh; overflow: hidden; background: #000; font-family: system-ui, Arial; }
     canvas { display: block; width: 100%; height: 100%; }
-    video { position: fixed; bottom: 12px; left: 12px; width: 200px; height: 150px; border-radius: 8px; opacity: 0.8; object-fit: cover; transform: scaleX(-1); }
-    #overlay { position: fixed; bottom: 12px; left: 12px; width: 200px; height: 150px; pointer-events: none; }
+    video { position: fixed; bottom: 12px; left: 12px; width: 200px; height: 150px; border-radius: 8px; opacity: 0.8; object-fit: cover; transform: scaleX(-1); z-index: 5; }
+    #overlay { position: fixed; bottom: 12px; left: 12px; width: 200px; height: 150px; pointer-events: none; z-index: 6; }
     #hud { 
       position: fixed; 
       top: 12px; 
@@ -21,7 +21,7 @@
       border-radius: 6px; 
       border: 1px solid rgba(100,200,255,0.3);
       font-family: monospace; 
-      z-index: 10; 
+      z-index: 20; 
       min-width: 280px;
       line-height: 1.5;
     }
@@ -32,15 +32,15 @@
   <canvas id="overlay" width="200" height="150"></canvas>
   <div id="hud">Initializing...</div>
 
-  <!-- Three.js -->
-  <script async src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Three.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-  <!-- MediaPipe -->
-  <script async src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-  <script async src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-  <script async src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <!-- MediaPipe CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
 
-  <script type="module">
+  <script>
     // Wait for Three.js and MediaPipe to load
     let retries = 0;
     const waitForDeps = setInterval(() => {

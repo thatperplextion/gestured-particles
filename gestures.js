@@ -14,12 +14,12 @@ export function initHandTracking(callback) {
   let palmVel = { x: 0, y: 0 };
   
   // Adaptive smoothing (stronger when hand is moving fast, lighter when stable)
-  const baseSmoothFactor = 0.15; // decreased from 0.2 for smoother transitions
-  const maxSmoothFactor = 0.25; // max smoothing during fast motion
+  const baseSmoothFactor = 0.08; // very responsive for immediate gesture feedback
+  const maxSmoothFactor = 0.18; // max smoothing during fast motion
   
   // Gesture validation buffer: track multiple metrics to confirm gesture
   let gestureHistory = [];
-  const gestureBufferSize = 6; // increased from 4 for more reliable detection
+  const gestureBufferSize = 3; // smaller buffer for faster response
   let lastConfirmedGesture = "OPEN";
 
   const hands = new Hands({
@@ -107,8 +107,23 @@ export function initHandTracking(callback) {
     const avgFingerDist = allFingerDists.reduce((a, b) => a + b) / 5;
     const avgFingerDistNorm = avgFingerDist / palmWidth;
     
+    // Additional finger curl detection: check if knuckles are bent
+    const indexKnuckle = lm[6]; // index finger PIP joint
+    const middleKnuckle = lm[10];
+    const ringKnuckle = lm[14];
+    const pinkyKnuckle = lm[18];
+    
+    const indexCurl = distance(indexTip, indexKnuckle) / palmWidth;
+    const middleCurl = distance(middleTip, middleKnuckle) / palmWidth;
+    const ringCurl = distance(ringTip, ringKnuckle) / palmWidth;
+    const pinkyCurl = distance(pinkyTip, pinkyKnuckle) / palmWidth;
+    const avgCurl = (indexCurl + middleCurl + ringCurl + pinkyCurl) / 4;
+    
     // Compression ratio: how close fingers are to palm (0 = fully closed, 1 = fully open)
-    const compressionRatio = Math.max(0, Math.min(1, (avgFingerDistNorm - 0.12) / 0.50));
+    // Use both distance to palm AND finger curl for robust detection
+    const distanceComponent = Math.max(0, Math.min(1, (avgFingerDistNorm - 0.08) / 0.55));
+    const curlComponent = Math.max(0, Math.min(1, (avgCurl - 0.15) / 0.35));
+    const compressionRatio = (distanceComponent * 0.6) + (curlComponent * 0.4); // weighted combination
     
     // Five-finger expansion modifier: compressing all fingers contracts, opening expands
     let fiveFingerExpansionModifier = 1;
@@ -153,10 +168,10 @@ export function initHandTracking(callback) {
     
     // GESTURE CLASSIFICATION based on five-finger compression
     let gesture = "OPEN";
-    if (compressionRatio < 0.30) {
-      // Fully closed fist/compression
+    if (compressionRatio < 0.35) {
+      // Fully closed fist/compression (more lenient threshold)
       gesture = "FIST";
-    } else if (compressionRatio < 0.45) {
+    } else if (compressionRatio < 0.55) {
       // Moderate compression (pinch-like state)
       gesture = "PINCH";
     } else {
@@ -164,26 +179,46 @@ export function initHandTracking(callback) {
       gesture = "OPEN";
     }
     
-    // Swipe detection using wrist horizontal velocity (momentum-based)
-    if (!initHandTracking._prevWristX) initHandTracking._prevWristX = wrist.x;
-    if (!initHandTracking._swipeVelocity) initHandTracking._swipeVelocity = 0;
-    if (!initHandTracking._lastSwipeTime) initHandTracking._lastSwipeTime = 0;
+    // HAND FLIP/REVERSE detection - palm up vs palm down
+    // Calculate hand orientation using palm normal vector
+    // Use three palm points to determine if hand is facing camera or flipped
+    const palmCenter = lm[9]; // middle finger base (palm center)
+    const palmLeft = lm[5];   // index finger base
+    const palmRight = lm[17]; // pinky base
     
-    const vx = wrist.x - initHandTracking._prevWristX;
-    initHandTracking._swipeVelocity = vx * 0.7 + initHandTracking._swipeVelocity * 0.3; // momentum smoothing
-    initHandTracking._prevWristX = wrist.x;
-
-    // Swipe threshold - lower for easier detection
-    const SWIPE_THRESHOLD = 0.06;
-    let swipeDirection = null;
+    // Cross product to find palm normal (perpendicular to palm surface)
+    // Vector from left to right across palm
+    const palmVecX = palmRight.x - palmLeft.x;
+    const palmVecY = palmRight.y - palmLeft.y;
+    const palmVecZ = palmRight.z - palmLeft.z;
+    
+    // Vector from palm to middle finger
+    const fingerVecX = middleBase.x - palmCenter.x;
+    const fingerVecY = middleBase.y - palmCenter.y;
+    const fingerVecZ = middleBase.z - palmCenter.z;
+    
+    // Cross product gives palm normal (facing direction)
+    const normalZ = palmVecX * fingerVecY - palmVecY * fingerVecX;
+    
+    // If normalZ > 0, palm faces camera (normal hand). If < 0, palm is flipped/reversed
+    const isFlipped = normalZ < -0.02; // threshold for clear flip detection
+    const isPalmForward = normalZ > 0.02;
+    
+    if (!initHandTracking._lastFlipState) initHandTracking._lastFlipState = isPalmForward;
+    if (!initHandTracking._lastFlipTime) initHandTracking._lastFlipTime = 0;
+    
+    let flipDirection = null;
     const now = Date.now();
     
-    // Allow swipe in any gesture state, but require 500ms between swipes
-    if (Math.abs(initHandTracking._swipeVelocity) > SWIPE_THRESHOLD && (now - initHandTracking._lastSwipeTime > 500)) {
-      // In selfie mode: positive velocity = leftward swipe
-      swipeDirection = initHandTracking._swipeVelocity > 0 ? "LEFT" : "RIGHT";
-      initHandTracking._swipeVelocity = 0; // reset after detection
-      initHandTracking._lastSwipeTime = now;
+    // Detect flip transition (must wait 800ms between detections)
+    if (initHandTracking._lastFlipState !== isFlipped && isFlipped && (now - initHandTracking._lastFlipTime > 800)) {
+      flipDirection = "FLIP";
+      initHandTracking._lastFlipState = isFlipped;
+      initHandTracking._lastFlipTime = now;
+    } else if (initHandTracking._lastFlipState !== isPalmForward && isPalmForward && (now - initHandTracking._lastFlipTime > 800)) {
+      flipDirection = "UNFLIP";
+      initHandTracking._lastFlipState = isPalmForward;
+      initHandTracking._lastFlipTime = now;
     }
 
     // Gesture history buffer for confident multi-frame validation
@@ -228,15 +263,18 @@ export function initHandTracking(callback) {
     smoothedPalmY += velocityAdaptiveFactor * (palm.y - smoothedPalmY);
     smoothedPalmZ += velocityAdaptiveFactor * (palm.z - smoothedPalmZ);
 
-    // Emit swipe or regular gesture - SINGLE CALLBACK ONLY
-    if (swipeDirection) {
-      const swipeSpeedDisplay = (palmSpeed * 100).toFixed(0);
-      if (hudEl) hudEl.innerHTML = `<span style="color:#ffd700">→ SWIPE ${swipeDirection}</span> | Speed: ${swipeSpeedDisplay}% | Exp: ${smoothedExpansion.toFixed(1)}`;
-      try { callback("SWIPE", smoothedExpansion, smoothedOpenness, swipeDirection); } catch (e) { console.warn(e); }
+    // Emit flip or regular gesture - SINGLE CALLBACK ONLY
+    if (flipDirection) {
+      const flipEmoji = flipDirection === "FLIP" ? "🔄" : "↩️";
+      if (hudEl) hudEl.innerHTML = `<span style="color:#ffd700">${flipEmoji} HAND ${flipDirection}</span> | Exp: ${smoothedExpansion.toFixed(1)}`;
+      try { callback("FLIP", smoothedExpansion, smoothedOpenness, flipDirection); } catch (e) { console.warn(e); }
     } else {
       let gestureEmoji = lastConfirmedGesture === "FIST" ? "✊" : lastConfirmedGesture === "PINCH" ? "🤏" : "🖐️";
       const speedDisplay = (palmSpeed * 100).toFixed(0);
-      if (hudEl) hudEl.innerHTML = `Gesture: <b>${gestureEmoji} ${lastConfirmedGesture}</b> | Speed: ${speedDisplay}% | Exp: ${smoothedExpansion.toFixed(1)} | Compress: ${(compressionRatio*100).toFixed(0)}%`;
+      const compressPercent = (compressionRatio*100).toFixed(0);
+      const curlPercent = (avgCurl*100).toFixed(0);
+      const orientationText = isFlipped ? "FLIPPED" : "NORMAL";
+      if (hudEl) hudEl.innerHTML = `Gesture: <b>${gestureEmoji} ${lastConfirmedGesture}</b> | ${orientationText} | Compress: ${compressPercent}% | Curl: ${curlPercent}%`;
       const handPos = { 
         x: smoothedPalmX, 
         y: smoothedPalmY, 
